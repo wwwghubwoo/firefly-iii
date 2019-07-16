@@ -30,6 +30,7 @@ use FireflyIII\Models\TransactionType;
 use FireflyIII\Services\Internal\Support\JournalServiceTrait;
 use Illuminate\Support\Collection;
 use Log;
+
 /**
  * Class to centralise code that updates a journal given the input by system.
  *
@@ -38,12 +39,13 @@ use Log;
 class JournalUpdateService
 {
     use JournalServiceTrait;
+
     /**
      * Constructor.
      */
     public function __construct()
     {
-        if ('testing' === env('APP_ENV')) {
+        if ('testing' === config('app.env')) {
             Log::warning(sprintf('%s should not be instantiated in the TEST environment!', \get_class($this)));
         }
     }
@@ -159,6 +161,7 @@ class JournalUpdateService
             foreach ($journal->transactions as $transaction) {
                 $service->updateBudget($transaction, $budgetId);
             }
+
             return $journal;
         }
         // clear budget.

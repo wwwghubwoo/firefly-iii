@@ -63,7 +63,7 @@ class TagFormRequest extends Request
             'description' => $this->string('description'),
             'latitude'    => $latitude,
             'longitude'   => $longitude,
-            'zoomLevel'   => $zoomLevel,
+            'zoom_level'  => $zoomLevel,
         ];
 
         return $data;
@@ -92,8 +92,8 @@ class TagFormRequest extends Request
             'description' => 'min:1|nullable',
             'date'        => 'date|nullable',
             'latitude'    => 'numeric|min:-90|max:90|nullable',
-            'longitude'   => 'numeric|min:-90|max:90|nullable',
-            'zoomLevel'   => 'numeric|min:0|max:80|nullable',
+            'longitude'   => 'numeric|min:-180|max:180|nullable',
+            'zoom_level'  => 'numeric|min:0|max:80|nullable',
         ];
     }
 }

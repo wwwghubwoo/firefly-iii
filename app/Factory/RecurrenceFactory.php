@@ -39,20 +39,20 @@ use Log;
  */
 class RecurrenceFactory
 {
+    /** @var User */
+    private $user;
+
+    use TransactionTypeTrait, TransactionServiceTrait, RecurringTransactionTrait;
+
     /**
      * Constructor.
      */
     public function __construct()
     {
-        if ('testing' === env('APP_ENV')) {
+        if ('testing' === config('app.env')) {
             Log::warning(sprintf('%s should not be instantiated in the TEST environment!', \get_class($this)));
         }
     }
-
-    use TransactionTypeTrait, TransactionServiceTrait, RecurringTransactionTrait;
-
-    /** @var User */
-    private $user;
 
     /**
      * @param array $data

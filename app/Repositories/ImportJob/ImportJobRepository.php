@@ -54,7 +54,7 @@ class ImportJobRepository implements ImportJobRepositoryInterface
         $this->maxUploadSize = (int)config('firefly.maxUploadSize');
         $this->uploadDisk    = Storage::disk('upload');
 
-        if ('testing' === env('APP_ENV')) {
+        if ('testing' === config('app.env')) {
             Log::warning(sprintf('%s should not be instantiated in the TEST environment!', \get_class($this)));
         }
     }
@@ -84,24 +84,34 @@ class ImportJobRepository implements ImportJobRepositoryInterface
      * @param array     $transactions
      *
      * @return ImportJob
+     * @throws \Illuminate\Contracts\Filesystem\FileNotFoundException
      */
     public function appendTransactions(ImportJob $job, array $transactions): ImportJob
     {
         Log::debug(sprintf('Now in appendTransactions(%s)', $job->key));
-        $existingTransactions = $job->transactions;
-        if (!\is_array($existingTransactions)) {
-            $existingTransactions = [];
-        }
-        $new = array_merge($existingTransactions, $transactions);
+        $existingTransactions = $this->getTransactions($job);
+        $new                  = array_merge($existingTransactions, $transactions);
         Log::debug(sprintf('Old transaction count: %d', \count($existingTransactions)));
         Log::debug(sprintf('To be added transaction count: %d', \count($transactions)));
         Log::debug(sprintf('New count: %d', \count($new)));
-        $job->transactions = $new;
-
-
-        $job->save();
+        $this->setTransactions($job, $new);
 
         return $job;
+    }
+
+    /**
+     * @param ImportJob $job
+     *
+     * @return int
+     */
+    public function countTransactions(ImportJob $job): int
+    {
+        $info = $job->transactions ?? [];
+        if (isset($info['count'])) {
+            return (int)$info['count'];
+        }
+
+        return 0;
     }
 
     /**
@@ -145,6 +155,16 @@ class ImportJobRepository implements ImportJobRepositoryInterface
     }
 
     /**
+     * @param int $jobId
+     *
+     * @return ImportJob|null
+     */
+    public function find(int $jobId): ?ImportJob
+    {
+        return $this->user->importJobs()->find($jobId);
+    }
+
+    /**
      * @param string $key
      *
      * @return ImportJob|null
@@ -158,6 +178,16 @@ class ImportJobRepository implements ImportJobRepositoryInterface
         }
 
         return $result;
+    }
+
+    /**
+     * Return all import jobs.
+     *
+     * @return Collection
+     */
+    public function get(): Collection
+    {
+        return $this->user->importJobs()->get();
     }
 
     /**
@@ -199,6 +229,31 @@ class ImportJobRepository implements ImportJobRepositoryInterface
         }
 
         return [];
+    }
+
+    /**
+     * Return transactions from attachment.
+     *
+     * @param ImportJob $job
+     *
+     * @return array
+     * @throws \Illuminate\Contracts\Filesystem\FileNotFoundException
+     */
+    public function getTransactions(ImportJob $job): array
+    {
+        // this will overwrite all transactions currently in the job.
+        $disk     = Storage::disk('upload');
+        $filename = sprintf('%s-%s.crypt.json', $job->created_at->format('Ymd'), $job->key);
+        $array    = [];
+        if ($disk->exists($filename)) {
+            $json  = Crypt::decrypt($disk->get($filename));
+            $array = json_decode($json, true);
+        }
+        if (false === $array) {
+            $array = [];
+        }
+
+        return $array;
     }
 
     /**
@@ -272,8 +327,17 @@ class ImportJobRepository implements ImportJobRepositoryInterface
      */
     public function setTransactions(ImportJob $job, array $transactions): ImportJob
     {
-        $job->transactions = $transactions;
+        // this will overwrite all transactions currently in the job.
+        $disk     = Storage::disk('upload');
+        $filename = sprintf('%s-%s.crypt.json', $job->created_at->format('Ymd'), $job->key);
+        $json     = Crypt::encrypt(json_encode($transactions));
+
+        // set count for easy access
+        $array             = ['count' => \count($transactions)];
+        $job->transactions = $array;
         $job->save();
+        // store file.
+        $disk->put($filename, $json);
 
         return $job;
     }
@@ -373,11 +437,11 @@ class ImportJobRepository implements ImportJobRepositoryInterface
         $attachment->size     = $file->getSize();
         $attachment->uploaded = false;
         $attachment->save();
-        $fileObject = $file->openFile('r');
+        $fileObject = $file->openFile();
         $fileObject->rewind();
 
 
-        if(0 === $file->getSize()) {
+        if (0 === $file->getSize()) {
             throw new FireflyException('Cannot upload empty or non-existent file.');
         }
 
@@ -389,7 +453,6 @@ class ImportJobRepository implements ImportJobRepositoryInterface
 
         return new MessageBag;
     }
-
 
     /**
      * @codeCoverageIgnore

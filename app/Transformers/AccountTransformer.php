@@ -25,38 +25,15 @@ namespace FireflyIII\Transformers;
 
 
 use Carbon\Carbon;
-use FireflyIII\Helpers\Collector\TransactionCollectorInterface;
 use FireflyIII\Models\Account;
-use FireflyIII\Models\AccountType;
-use FireflyIII\Models\TransactionCurrency;
 use FireflyIII\Repositories\Account\AccountRepositoryInterface;
-use Illuminate\Support\Collection;
-use League\Fractal\Resource\Collection as FractalCollection;
-use League\Fractal\Resource\Item;
-use League\Fractal\TransformerAbstract;
-use Symfony\Component\HttpFoundation\ParameterBag;
+use Log;
 
 /**
  * Class AccountTransformer
  */
-class AccountTransformer extends TransformerAbstract
+class AccountTransformer extends AbstractTransformer
 {
-    /** @noinspection ClassOverridesFieldOfSuperClassInspection */
-    /**
-     * List of resources possible to include.
-     *
-     * @var array
-     */
-    protected $availableIncludes = ['transactions', 'piggy_banks', 'user'];
-    /**
-     * List of resources to automatically include
-     *
-     * @var array
-     */
-    protected $defaultIncludes = [];
-    /** @var ParameterBag */
-    protected $parameters;
-
     /** @var AccountRepositoryInterface */
     protected $repository;
 
@@ -65,74 +42,14 @@ class AccountTransformer extends TransformerAbstract
      * AccountTransformer constructor.
      *
      * @codeCoverageIgnore
-     *
-     * @param ParameterBag $parameters
      */
-    public function __construct(ParameterBag $parameters)
+    public function __construct()
     {
+        if ('testing' === config('app.env')) {
+            Log::warning(sprintf('%s should not be instantiated in the TEST environment!', \get_class($this)));
+        }
+
         $this->repository = app(AccountRepositoryInterface::class);
-        $this->parameters = $parameters;
-    }
-
-    /**
-     * Include piggy banks into end result.
-     *
-     * @codeCoverageIgnore
-     *
-     * @param Account $account
-     *
-     * @return FractalCollection
-     */
-    public function includePiggyBanks(Account $account): FractalCollection
-    {
-        $piggies = $account->piggyBanks()->get();
-
-        return $this->collection($piggies, new PiggyBankTransformer($this->parameters), 'piggy_banks');
-    }
-
-    /**
-     * Include transactions into end result.
-     *
-     * @codeCoverageIgnore
-     *
-     * @param Account $account
-     *
-     * @return FractalCollection
-     */
-    public function includeTransactions(Account $account): FractalCollection
-    {
-        $pageSize = (int)app('preferences')->getForUser($account->user, 'listPageSize', 50)->data;
-
-        // journals always use collector and limited using URL parameters.
-        $collector = app(TransactionCollectorInterface::class);
-        $collector->setUser($account->user);
-        $collector->withOpposingAccount()->withCategoryInformation()->withBudgetInformation();
-        if ($account->accountType->type === AccountType::ASSET) {
-            $collector->setAccounts(new Collection([$account]));
-        } else {
-            $collector->setOpposingAccounts(new Collection([$account]));
-        }
-        if (null !== $this->parameters->get('start') && null !== $this->parameters->get('end')) {
-            $collector->setRange($this->parameters->get('start'), $this->parameters->get('end'));
-        }
-        $collector->setLimit($pageSize)->setPage($this->parameters->get('page'));
-        $transactions = $collector->getTransactions();
-
-        return $this->collection($transactions, new TransactionTransformer($this->parameters), 'transactions');
-    }
-
-    /**
-     * Include user data in end result.
-     *
-     * @codeCoverageIgnore
-     *
-     * @param Account $account
-     *
-     * @return Item
-     */
-    public function includeUser(Account $account): Item
-    {
-        return $this->item($account->user, new UserTransformer($this->parameters), 'users');
     }
 
     /**
@@ -146,73 +63,61 @@ class AccountTransformer extends TransformerAbstract
     {
         $this->repository->setUser($account->user);
 
-        $type = $account->accountType->type;
-        $role = $this->repository->getMetaValue($account, 'accountRole');
-        if ($type !== AccountType::ASSET || '' === (string)$role) {
-            $role = null;
-        }
-        $currencyId     = (int)$this->repository->getMetaValue($account, 'currency_id');
-        $currencyCode   = null;
-        $currencySymbol = null;
-        $decimalPlaces  = 2;
-        if ($currencyId > 0) {
-            $currency       = TransactionCurrency::find($currencyId);
-            $currencyCode   = $currency->code;
-            $decimalPlaces  = $currency->decimal_places;
-            $currencySymbol = $currency->symbol;
+        // get account type:
+        $fullType      = $this->repository->getAccountType($account);
+        $accountType   = (string)config(sprintf('firefly.shortNamesByFullName.%s', $fullType));
+        $liabilityType = (string)config(sprintf('firefly.shortLiabilityNameByFullName.%s', $fullType));
+        $liabilityType = '' === $liabilityType ? null : $liabilityType;
+
+        // get account role (will only work if the type is asset.
+        $accountRole = $this->getAccountRole($account, $accountType);
+        $date        = $this->getDate();
+
+        [$currencyId, $currencyCode, $currencySymbol, $decimalPlaces] = $this->getCurrency($account);
+        [$creditCardType, $monthlyPaymentDate] = $this->getCCInfo($account, $accountRole, $accountType);
+        [$openingBalance, $openingBalanceDate] = $this->getOpeningBalance($account, $accountType, $decimalPlaces);
+        [$interest, $interestPeriod] = $this->getInterest($account, $accountType);
+
+        $liabilityAmount = null;
+        $liabilityStart  = null;
+        if (null !== $liabilityType) {
+            $liabilityAmount = $openingBalance;
+            $liabilityStart  = $openingBalanceDate;
         }
 
-        $date = new Carbon;
-        if (null !== $this->parameters->get('date')) {
-            $date = $this->parameters->get('date');
-        }
 
-        if (0 === $currencyId) {
-            $currencyId = null;
-        }
-
-        $monthlyPaymentDate = null;
-        $creditCardType     = null;
-        if ('ccAsset' === $role && $type === AccountType::ASSET) {
-            $creditCardType     = $this->repository->getMetaValue($account, 'ccType');
-            $monthlyPaymentDate = $this->repository->getMetaValue($account, 'ccMonthlyPaymentDate');
-        }
-
-        $openingBalance     = null;
-        $openingBalanceDate = null;
-        if ($type === AccountType::ASSET) {
-            /** @var AccountRepositoryInterface $repository */
-            $repository = app(AccountRepositoryInterface::class);
-            $repository->setUser($account->user);
-            $amount             = $repository->getOpeningBalanceAmount($account);
-            $openingBalance     = null === $amount ? null : round($amount, $decimalPlaces);
-            $openingBalanceDate = $repository->getOpeningBalanceDate($account);
-        }
+        $includeNetWorth = '0' !== $this->repository->getMetaValue($account, 'include_net_worth');
 
         $data = [
-            'id'                   => (int)$account->id,
-            'updated_at'           => $account->updated_at->toAtomString(),
-            'created_at'           => $account->created_at->toAtomString(),
-            'name'                 => $account->name,
-            'active'               => 1 === (int)$account->active,
-            'type'                 => $type,
-            'currency_id'          => $currencyId,
-            'currency_code'        => $currencyCode,
-            'currency_symbol'      => $currencySymbol,
-            'currency_dp'          => $decimalPlaces,
-            'current_balance'      => round(app('steam')->balance($account, $date), $decimalPlaces),
-            'current_balance_date' => $date->format('Y-m-d'),
-            'notes'                => $this->repository->getNoteText($account),
-            'monthly_payment_date' => $monthlyPaymentDate,
-            'credit_card_type'     => $creditCardType,
-            'account_number'       => $this->repository->getMetaValue($account, 'accountNumber'),
-            'iban'                 => $account->iban,
-            'bic'                  => $this->repository->getMetaValue($account, 'BIC'),
-            'virtual_balance'      => round($account->virtual_balance, $decimalPlaces),
-            'opening_balance'      => $openingBalance,
-            'opening_balance_date' => $openingBalanceDate,
-            'role'                 => $role,
-            'links'                => [
+            'id'                      => (int)$account->id,
+            'created_at'              => $account->created_at->toAtomString(),
+            'updated_at'              => $account->updated_at->toAtomString(),
+            'active'                  => $account->active,
+            'name'                    => $account->name,
+            'type'                    => $accountType,
+            'account_role'            => $accountRole,
+            'currency_id'             => $currencyId,
+            'currency_code'           => $currencyCode,
+            'currency_symbol'         => $currencySymbol,
+            'currency_decimal_places' => $decimalPlaces,
+            'current_balance'         => round(app('steam')->balance($account, $date), $decimalPlaces),
+            'current_balance_date'    => $date->format('Y-m-d'),
+            'notes'                   => $this->repository->getNoteText($account),
+            'monthly_payment_date'    => $monthlyPaymentDate,
+            'credit_card_type'        => $creditCardType,
+            'account_number'          => $this->repository->getMetaValue($account, 'accountNumber'),
+            'iban'                    => '' === $account->iban ? null : $account->iban,
+            'bic'                     => $this->repository->getMetaValue($account, 'BIC'),
+            'virtual_balance'         => round($account->virtual_balance, $decimalPlaces),
+            'opening_balance'         => $openingBalance,
+            'opening_balance_date'    => $openingBalanceDate,
+            'liability_type'          => $liabilityType,
+            'liability_amount'        => $liabilityAmount,
+            'liability_start_date'    => $liabilityStart,
+            'interest'                => $interest,
+            'interest_period'         => $interestPeriod,
+            'include_net_worth'       => $includeNetWorth,
+            'links'                   => [
                 [
                     'rel' => 'self',
                     'uri' => '/accounts/' . $account->id,
@@ -221,5 +126,115 @@ class AccountTransformer extends TransformerAbstract
         ];
 
         return $data;
+    }
+
+    /**
+     * @param Account $account
+     *
+     * @param string  $accountType
+     *
+     * @return string|null
+     */
+    private function getAccountRole(Account $account, string $accountType): ?string
+    {
+        $accountRole = $this->repository->getMetaValue($account, 'accountRole');
+        if ('asset' !== $accountType || '' === (string)$accountRole) {
+            $accountRole = null;
+        }
+
+        return $accountRole;
+    }
+
+    /**
+     * @param Account     $account
+     * @param string|null $accountRole
+     * @param string      $accountType
+     *
+     * @return array
+     */
+    private function getCCInfo(Account $account, ?string $accountRole, string $accountType): array
+    {
+        $monthlyPaymentDate = null;
+        $creditCardType     = null;
+        if ('ccAsset' === $accountRole && 'asset' === $accountType) {
+            $creditCardType     = $this->repository->getMetaValue($account, 'ccType');
+            $monthlyPaymentDate = $this->repository->getMetaValue($account, 'ccMonthlyPaymentDate');
+        }
+
+        return [$creditCardType, $monthlyPaymentDate];
+    }
+
+    /**
+     * @param Account $account
+     *
+     * @return array
+     */
+    private function getCurrency(Account $account): array
+    {
+        $currency       = $this->repository->getAccountCurrency($account);
+        $currencyId     = null;
+        $currencyCode   = null;
+        $decimalPlaces  = 2;
+        $currencySymbol = null;
+        if (null !== $currency) {
+            $currencyId     = $currency->id;
+            $currencyCode   = $currency->code;
+            $decimalPlaces  = $currency->decimal_places;
+            $currencySymbol = $currency->symbol;
+        }
+
+        return [$currencyId, $currencyCode, $currencySymbol, $decimalPlaces];
+    }
+
+    /**
+     * @return Carbon
+     */
+    private function getDate(): Carbon
+    {
+        $date = new Carbon;
+        if (null !== $this->parameters->get('date')) {
+            $date = $this->parameters->get('date');
+        }
+
+        return $date;
+    }
+
+    /**
+     * @param Account $account
+     * @param string  $accountType
+     *
+     * @return array
+     */
+    private function getInterest(Account $account, string $accountType): array
+    {
+        $interest       = null;
+        $interestPeriod = null;
+        if ('liabilities' === $accountType) {
+            $interest       = $this->repository->getMetaValue($account, 'interest');
+            $interestPeriod = $this->repository->getMetaValue($account, 'interest_period');
+        }
+
+        return [$interest, $interestPeriod];
+    }
+
+    /**
+     * @param Account $account
+     * @param string  $accountType
+     *
+     * @param int     $decimalPlaces
+     *
+     * @return array
+     */
+    private function getOpeningBalance(Account $account, string $accountType, int $decimalPlaces): array
+    {
+        $openingBalance     = null;
+        $openingBalanceDate = null;
+        if (\in_array($accountType, ['asset', 'liabilities'], true)) {
+            $amount             = $this->repository->getOpeningBalanceAmount($account);
+            $openingBalance     = null === $amount ? null : round($amount, $decimalPlaces);
+            $openingBalanceDate = $this->repository->getOpeningBalanceDate($account);
+        }
+
+        return [$openingBalance, $openingBalanceDate];
     }
 }

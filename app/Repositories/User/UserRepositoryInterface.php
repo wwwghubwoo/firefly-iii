@@ -31,6 +31,7 @@ use Illuminate\Support\Collection;
  */
 interface UserRepositoryInterface
 {
+
     /**
      * Returns a collection of all users.
      *
@@ -128,6 +129,13 @@ interface UserRepositoryInterface
      * @return Role|null
      */
     public function getRole(string $role): ?Role;
+
+    /**
+     * @param User $user
+     *
+     * @return string|null
+     */
+    public function getRoleByUser(User $user): ?string;
 
     /**
      * Return basic user information.

@@ -24,6 +24,8 @@ declare(strict_types=1);
 
 return [
     'iban'                           => 'Dit is niet een geldige IBAN.',
+    'zero_or_more'                   => 'De waarde mag niet negatief zijn.',
+    'date_or_time'                   => 'De waarde moet een geldige datum of tijdwaarde zijn (ISO 8601).',
     'source_equals_destination'      => 'De bronrekening is gelijk aan de doelrekening.',
     'unique_account_number_for_user' => 'Het lijkt erop dat dit rekeningnummer al in gebruik is.',
     'unique_iban_for_user'           => 'Het lijkt erop dat deze IBAN al in gebruik is.',
@@ -122,7 +124,7 @@ return [
     'present'                        => 'Het :attribute veld moet aanwezig zijn.',
     'amount_zero'                    => 'Het totaalbedrag kan niet nul zijn.',
     'unique_piggy_bank_for_user'     => 'De naam van de spaarpot moet uniek zijn.',
-    'secure_password'                => 'Dit is geen sterk wachtwoord. Probeer het nog een keer. Zie ook: http://bit.ly/FF3-password-security.',
+    'secure_password'                => 'Dit is geen veilig wachtwoord. Probeer het nog een keer. Zie ook: https://bit.ly/FF3-password-security',
     'valid_recurrence_rep_type'      => 'Dit is geen geldige herhaling voor periodieke transacties.',
     'valid_recurrence_rep_moment'    => 'Ongeldig herhaalmoment voor dit type herhaling.',
     'invalid_account_info'           => 'Ongeldige rekeninginformatie.',

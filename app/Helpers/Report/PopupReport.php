@@ -31,6 +31,7 @@ use FireflyIII\Models\TransactionType;
 use FireflyIII\Repositories\Journal\JournalRepositoryInterface;
 use Illuminate\Support\Collection;
 use Log;
+
 /**
  * Class PopupReport.
  *
@@ -43,7 +44,7 @@ class PopupReport implements PopupReportInterface
      */
     public function __construct()
     {
-        if ('testing' === env('APP_ENV')) {
+        if ('testing' === config('app.env')) {
             Log::warning(sprintf('%s should not be instantiated in the TEST environment!', \get_class($this)));
         }
     }
@@ -186,7 +187,7 @@ class PopupReport implements PopupReportInterface
         $collector->setAccounts(new Collection([$account]))->setRange($attributes['startDate'], $attributes['endDate'])
                   ->setTypes([TransactionType::DEPOSIT, TransactionType::TRANSFER]);
         $transactions = $collector->getTransactions();
-        $report   = $attributes['accounts']->pluck('id')->toArray(); // accounts used in this report
+        $report       = $attributes['accounts']->pluck('id')->toArray(); // accounts used in this report
 
         // filter the set so the destinations outside of $attributes['accounts'] are not included.
         $transactions = $transactions->filter(

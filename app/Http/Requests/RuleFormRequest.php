@@ -58,8 +58,8 @@ class RuleFormRequest extends Request
             'description'     => $this->string('description'),
             'stop_processing' => $this->boolean('stop_processing'),
             'strict'          => $this->boolean('strict'),
-            'rule_triggers'   => $this->getRuleTriggerData(),
-            'rule_actions'    => $this->getRuleActionData(),
+            'triggers'        => $this->getRuleTriggerData(),
+            'actions'         => $this->getRuleActionData(),
         ];
 
         return $data;
@@ -75,32 +75,31 @@ class RuleFormRequest extends Request
         $validTriggers = array_keys(config('firefly.rule-triggers'));
         $validActions  = array_keys(config('firefly.rule-actions'));
 
-        // some actions require text:
-        $contextActions = implode(',', config('firefly.rule-actions-text'));
+        // some actions require text (aka context):
+        $contextActions = implode(',', config('firefly.context-rule-actions'));
 
-        $titleRule = 'required|between:1,100|uniqueObjectForUser:rules,title';
+        // some triggers require text (aka context):
+        $contextTriggers = implode(',', config('firefly.context-rule-triggers'));
+
+        // initial set of rules:
+        $rules = [
+            'title'            => 'required|between:1,100|uniqueObjectForUser:rules,title',
+            'description'      => 'between:1,5000|nullable',
+            'stop_processing'  => 'boolean',
+            'rule_group_id'    => 'required|belongsToUser:rule_groups',
+            'trigger'          => 'required|in:store-journal,update-journal',
+            'triggers.*.type'  => 'required|in:' . implode(',', $validTriggers),
+            'triggers.*.value' => sprintf('required_if:triggers.*.type,%s|min:1|ruleTriggerValue', $contextTriggers),
+            'actions.*.type'   => 'required|in:' . implode(',', $validActions),
+            'actions.*.value'  => sprintf('required_if:actions.*.type,%s|min:1|ruleActionValue', $contextActions),
+            'strict'           => 'in:0,1',
+        ];
+
         /** @var Rule $rule */
         $rule = $this->route()->parameter('rule');
 
         if (null !== $rule) {
-            $titleRule = 'required|between:1,100|uniqueObjectForUser:rules,title,' . $rule->id;
-        }
-        $rules = [
-            'title'                 => $titleRule,
-            'description'           => 'between:1,5000|nullable',
-            'stop_processing'       => 'boolean',
-            'rule_group_id'         => 'required|belongsToUser:rule_groups',
-            'trigger'               => 'required|in:store-journal,update-journal',
-            'rule_triggers.*.name'  => 'required|in:' . implode(',', $validTriggers),
-            'rule_triggers.*.value' => 'required|min:1|ruleTriggerValue',
-            'rule-actions.*.name'   => 'required|in:' . implode(',', $validActions),
-            'strict'                => 'in:0,1',
-        ];
-        // since Laravel does not support this stuff yet, here's a trick.
-        for ($i = 0; $i < 10; ++$i) {
-            $key         = sprintf('rule_actions.%d.value', $i);
-            $rule        = sprintf('required-if:rule_actions.%d.name,%s|ruleActionValue', $i, $contextActions);
-            $rules[$key] = $rule;
+            $rules['title'] = 'required|between:1,100|uniqueObjectForUser:rules,title,' . $rule->id;
         }
 
         return $rules;
@@ -112,12 +111,12 @@ class RuleFormRequest extends Request
     private function getRuleActionData(): array
     {
         $return     = [];
-        $actionData = $this->get('rule_actions');
+        $actionData = $this->get('actions');
         if (\is_array($actionData)) {
             foreach ($actionData as $action) {
                 $stopProcessing = $action['stop_processing'] ?? '0';
                 $return[]       = [
-                    'name'            => $action['name'] ?? 'invalid',
+                    'type'            => $action['type'] ?? 'invalid',
                     'value'           => $action['value'] ?? '',
                     'stop_processing' => 1 === (int)$stopProcessing,
                 ];
@@ -133,12 +132,12 @@ class RuleFormRequest extends Request
     private function getRuleTriggerData(): array
     {
         $return      = [];
-        $triggerData = $this->get('rule_triggers');
+        $triggerData = $this->get('triggers');
         if (\is_array($triggerData)) {
             foreach ($triggerData as $trigger) {
                 $stopProcessing = $trigger['stop_processing'] ?? '0';
                 $return[]       = [
-                    'name'            => $trigger['name'] ?? 'invalid',
+                    'type'            => $trigger['type'] ?? 'invalid',
                     'value'           => $trigger['value'] ?? '',
                     'stop_processing' => 1 === (int)$stopProcessing,
                 ];

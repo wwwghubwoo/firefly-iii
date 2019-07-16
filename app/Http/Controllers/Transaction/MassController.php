@@ -23,8 +23,8 @@ declare(strict_types=1);
 namespace FireflyIII\Http\Controllers\Transaction;
 
 use Carbon\Carbon;
+use FireflyIII\Events\UpdatedTransactionJournal;
 use FireflyIII\Helpers\Collector\TransactionCollectorInterface;
-use FireflyIII\Helpers\Filter\InternalTransferFilter;
 use FireflyIII\Helpers\Filter\TransactionViewFilter;
 use FireflyIII\Helpers\Filter\TransferFilter;
 use FireflyIII\Http\Controllers\Controller;
@@ -142,7 +142,10 @@ class MassController extends Controller
 
         $this->rememberPreviousUri('transactions.mass-edit.uri');
 
-        $transformer = new TransactionTransformer(new ParameterBag);
+        /** @var TransactionTransformer $transformer */
+        $transformer = app(TransactionTransformer::class);
+        $transformer->setParameters(new ParameterBag);
+
         /** @var TransactionCollectorInterface $collector */
         $collector = app(TransactionCollectorInterface::class);
         $collector->setUser($user);
@@ -237,6 +240,9 @@ class MassController extends Controller
                     ];
                     // call repository update function.
                     $repository->update($journal, $data);
+
+                    // trigger rules
+                    event(new UpdatedTransactionJournal($journal));
 
                     ++$count;
                 }

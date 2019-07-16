@@ -104,7 +104,7 @@ class Transaction extends Twig_Extension
         // first display amount:
         $amount                       = (string)$transaction['amount'];
         $fakeCurrency                 = new TransactionCurrency;
-        $fakeCurrency->decimal_places = $transaction['currency_dp'];
+        $fakeCurrency->decimal_places = $transaction['currency_decimal_places'];
         $fakeCurrency->symbol         = $transaction['currency_symbol'];
         $string                       = app('amount')->formatAnything($fakeCurrency, $amount, true);
 
@@ -112,7 +112,7 @@ class Transaction extends Twig_Extension
         if (null !== $transaction['foreign_amount']) {
             $amount                       = (string)$transaction['foreign_amount'];
             $fakeCurrency                 = new TransactionCurrency;
-            $fakeCurrency->decimal_places = $transaction['foreign_currency_dp'];
+            $fakeCurrency->decimal_places = $transaction['foreign_currency_decimal_places'];
             $fakeCurrency->symbol         = $transaction['foreign_currency_symbol'];
             $string                       .= ' (' . app('amount')->formatAnything($fakeCurrency, $amount, true) . ')';
         }
@@ -131,14 +131,14 @@ class Transaction extends Twig_Extension
         $txt = '';
         // journal has a budget:
         if (null !== $transaction->transaction_journal_budget_id) {
-            $name = app('steam')->tryDecrypt($transaction->transaction_journal_budget_name);
-            $txt  = sprintf('<a href="%s" title="%s">%s</a>', route('budgets.show', [$transaction->transaction_journal_budget_id]), $name, $name);
+            $name = $transaction->transaction_journal_budget_name;
+            $txt  = sprintf('<a href="%s" title="%s">%s</a>', route('budgets.show', [$transaction->transaction_journal_budget_id]), e($name), e($name));
         }
 
         // transaction has a budget
         if (null !== $transaction->transaction_budget_id && '' === $txt) {
-            $name = app('steam')->tryDecrypt($transaction->transaction_budget_name);
-            $txt  = sprintf('<a href="%s" title="%s">%s</a>', route('budgets.show', [$transaction->transaction_budget_id]), $name, $name);
+            $name = $transaction->transaction_budget_name;
+            $txt  = sprintf('<a href="%s" title="%s">%s</a>', route('budgets.show', [$transaction->transaction_budget_id]), e($name), e($name));
         }
 
         if ('' === $txt) {
@@ -150,7 +150,7 @@ class Transaction extends Twig_Extension
             if ($budgets->count() > 0) {
                 $str = [];
                 foreach ($budgets as $budget) {
-                    $str[] = sprintf('<a href="%s" title="%s">%s</a>', route('budgets.show', [$budget->id]), $budget->name, $budget->name);
+                    $str[] = sprintf('<a href="%s" title="%s">%s</a>', route('budgets.show', [$budget->id]), e($budget->name), e($budget->name));
                 }
                 $txt = implode(', ', $str);
             }
@@ -169,14 +169,14 @@ class Transaction extends Twig_Extension
         $txt = '';
         // journal has a category:
         if (null !== $transaction->transaction_journal_category_id) {
-            $name = app('steam')->tryDecrypt($transaction->transaction_journal_category_name);
-            $txt  = sprintf('<a href="%s" title="%s">%s</a>', route('categories.show', [$transaction->transaction_journal_category_id]), $name, $name);
+            $name = $transaction->transaction_journal_category_name;
+            $txt  = sprintf('<a href="%s" title="%s">%s</a>', route('categories.show', [$transaction->transaction_journal_category_id]), e($name), e($name));
         }
 
         // transaction has a category:
         if (null !== $transaction->transaction_category_id && '' === $txt) {
-            $name = app('steam')->tryDecrypt($transaction->transaction_category_name);
-            $txt  = sprintf('<a href="%s" title="%s">%s</a>', route('categories.show', [$transaction->transaction_category_id]), $name, $name);
+            $name = $transaction->transaction_category_name;
+            $txt  = sprintf('<a href="%s" title="%s">%s</a>', route('categories.show', [$transaction->transaction_category_id]), e($name), e($name));
         }
 
         if ('' === $txt) {
@@ -188,7 +188,7 @@ class Transaction extends Twig_Extension
             if ($categories->count() > 0) {
                 $str = [];
                 foreach ($categories as $category) {
-                    $str[] = sprintf('<a href="%s" title="%s">%s</a>', route('categories.show', [$category->id]), $category->name, $category->name);
+                    $str[] = sprintf('<a href="%s" title="%s">%s</a>', route('categories.show', [$category->id]), e($category->name), e($category->name));
                 }
 
                 $txt = implode(', ', $str);
@@ -206,7 +206,7 @@ class Transaction extends Twig_Extension
     public function description(TransactionModel $transaction): string
     {
         $description = $transaction->description;
-        if (\strlen((string)$transaction->transaction_description) > 0) {
+        if ('' !== (string)$transaction->transaction_description) {
             $description = $transaction->transaction_description . ' (' . $transaction->description . ')';
         }
 
@@ -224,7 +224,8 @@ class Transaction extends Twig_Extension
             return '&mdash;';
         }
 
-        $name          = app('steam')->tryDecrypt($transaction->account_name);
+        $name          = $transaction->account_name;
+        $iban          = $transaction->account_iban;
         $transactionId = (int)$transaction->account_id;
         $type          = $transaction->account_type;
 
@@ -233,6 +234,7 @@ class Transaction extends Twig_Extension
             $name          = $transaction->opposing_account_name;
             $transactionId = (int)$transaction->opposing_account_id;
             $type          = $transaction->opposing_account_type;
+            $iban          = $transaction->opposing_account_iban;
         }
 
         // Find the opposing account and use that one:
@@ -253,7 +255,7 @@ class Transaction extends Twig_Extension
 
                 return '';
             }
-            $name          = app('steam')->tryDecrypt($other->name);
+            $name          = $other->name;
             $transactionId = $other->account_id;
             $type          = $other->type;
         }
@@ -264,7 +266,7 @@ class Transaction extends Twig_Extension
             return $txt;
         }
 
-        $txt = sprintf('<a title="%1$s" href="%2$s">%1$s</a>', e($name), route('accounts.show', [$transactionId]));
+        $txt = sprintf('<a title="%3$s" href="%2$s">%1$s</a>', e($name), route('accounts.show', [$transactionId]), e($iban));
 
         return $txt;
     }
@@ -382,15 +384,17 @@ class Transaction extends Twig_Extension
         }
 
         // if the amount is negative, assume that the current account (the one in $transaction) is indeed the source account.
-        $name          = app('steam')->tryDecrypt($transaction->account_name);
+        $name          = $transaction->account_name;
         $transactionId = (int)$transaction->account_id;
         $type          = $transaction->account_type;
+        $iban          = $transaction->account_iban;
 
         // name is present in object, use that one:
         if (null !== $transaction->opposing_account_id && 1 === bccomp($transaction->transaction_amount, '0')) {
             $name          = $transaction->opposing_account_name;
             $transactionId = (int)$transaction->opposing_account_id;
             $type          = $transaction->opposing_account_type;
+            $iban          = $transaction->opposing_account_iban;
         }
         // Find the opposing account and use that one:
         if (null === $transaction->opposing_account_id && 1 === bccomp($transaction->transaction_amount, '0')) {
@@ -404,7 +408,7 @@ class Transaction extends Twig_Extension
                                              ->leftJoin('accounts', 'accounts.id', '=', 'transactions.account_id')
                                              ->leftJoin('account_types', 'account_types.id', '=', 'accounts.account_type_id')
                                              ->first(['transactions.account_id', 'accounts.encrypted', 'accounts.name', 'account_types.type']);
-            $name          = app('steam')->tryDecrypt($other->name);
+            $name          = $other->name;
             $transactionId = $other->account_id;
             $type          = $other->type;
         }
@@ -415,7 +419,7 @@ class Transaction extends Twig_Extension
             return $txt;
         }
 
-        $txt = sprintf('<a title="%1$s" href="%2$s">%1$s</a>', e($name), route('accounts.show', [$transactionId]));
+        $txt = sprintf('<a title="%3$s" href="%2$s">%1$s</a>', e($name), route('accounts.show', [$transactionId]), e($iban));
 
         return $txt;
     }

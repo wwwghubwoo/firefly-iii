@@ -26,6 +26,7 @@ namespace FireflyIII\Services\Internal\Destroy;
 use DB;
 use Exception;
 use FireflyIII\Models\Account;
+use FireflyIII\Models\PiggyBank;
 use FireflyIII\Models\RecurrenceTransaction;
 use FireflyIII\Models\Transaction;
 use FireflyIII\Models\TransactionJournal;
@@ -42,7 +43,7 @@ class AccountDestroyService
      */
     public function __construct()
     {
-        if ('testing' === env('APP_ENV')) {
+        if ('testing' === config('app.env')) {
             Log::warning(sprintf('%s should not be instantiated in the TEST environment!', \get_class($this)));
         }
     }
@@ -61,7 +62,7 @@ class AccountDestroyService
             DB::table('transactions')->where('account_id', $account->id)->update(['account_id' => $moveTo->id]);
 
             // also update recurring transactions:
-            DB::table('recurrences_transactions')->where('source_id', $account->id)->update(['source_id' =>  $moveTo->id]);
+            DB::table('recurrences_transactions')->where('source_id', $account->id)->update(['source_id' => $moveTo->id]);
             DB::table('recurrences_transactions')->where('destination_id', $account->id)->update(['destination_id' => $moveTo->id]);
         }
         $service = app(JournalDestroyService::class);
@@ -96,6 +97,9 @@ class AccountDestroyService
                 $destroyService->destroyById((int)$recurrenceId);
             }
         }
+
+        // delete piggy banks:
+        PiggyBank::where('account_id', $account->id)->delete();
 
         try {
             $account->delete();

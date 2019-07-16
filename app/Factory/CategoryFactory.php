@@ -34,18 +34,18 @@ use Log;
  */
 class CategoryFactory
 {
+    /** @var User */
+    private $user;
+
     /**
      * Constructor.
      */
     public function __construct()
     {
-        if ('testing' === env('APP_ENV')) {
+        if ('testing' === config('app.env')) {
             Log::warning(sprintf('%s should not be instantiated in the TEST environment!', \get_class($this)));
         }
     }
-
-    /** @var User */
-    private $user;
 
     /**
      * @param string $name
@@ -94,7 +94,7 @@ class CategoryFactory
             }
         }
 
-        if (\strlen($categoryName) > 0) {
+        if ('' !== $categoryName) {
             $category = $this->findByName($categoryName);
             if (null !== $category) {
                 return $category;

@@ -24,6 +24,8 @@ declare(strict_types=1);
 
 return [
     'iban'                           => 'This is not a valid IBAN.',
+    'zero_or_more'                   => 'The value cannot be negative.',
+    'date_or_time'                   => 'The value must be a valid date or time value (ISO 8601).',
     'source_equals_destination'      => 'The source account equals the destination account.',
     'unique_account_number_for_user' => 'It looks like this account number is already in use.',
     'unique_iban_for_user'           => 'It looks like this IBAN is already in use.',
@@ -122,7 +124,7 @@ return [
     'present'                        => 'The :attribute field must be present.',
     'amount_zero'                    => 'The total amount cannot be zero.',
     'unique_piggy_bank_for_user'     => 'The name of the piggy bank must be unique.',
-    'secure_password'                => 'This is not a secure password. Please try again. For more information, visit http://bit.ly/FF3-password-security.',
+    'secure_password'                => 'This is not a secure password. Please try again. For more information, visit https://bit.ly/FF3-password-security',
     'valid_recurrence_rep_type'      => 'Invalid repetition type for recurring transactions.',
     'valid_recurrence_rep_moment'    => 'Invalid repetition moment for this type of repetition.',
     'invalid_account_info'           => 'Invalid account information.',

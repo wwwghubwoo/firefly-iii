@@ -26,11 +26,12 @@ use Crypt;
 use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Models\Attachment;
 use Illuminate\Contracts\Encryption\DecryptException;
+use Illuminate\Contracts\Filesystem\FileNotFoundException;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\MessageBag;
 use Log;
-use Storage;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 
 /**
@@ -65,7 +66,7 @@ class AttachmentHelper implements AttachmentHelperInterface
         $this->attachments   = new Collection;
         $this->uploadDisk    = Storage::disk('upload');
 
-        if ('testing' === env('APP_ENV')) {
+        if ('testing' === config('app.env')) {
             Log::warning(sprintf('%s should not be instantiated in the TEST environment!', \get_class($this)));
         }
     }
@@ -85,7 +86,7 @@ class AttachmentHelper implements AttachmentHelperInterface
 
         try {
             $content = Crypt::decrypt($this->uploadDisk->get(sprintf('at-%d.data', $attachment->id)));
-        } catch (DecryptException $e) {
+        } catch (DecryptException|FileNotFoundException $e) {
             Log::error(sprintf('Could not decrypt data of attachment #%d: %s', $attachment->id, $e->getMessage()));
             $content = '';
         }
@@ -94,7 +95,7 @@ class AttachmentHelper implements AttachmentHelperInterface
     }
 
     /**
-     * Returns the file location for an attachment,
+     * Returns the file path relative to upload disk for an attachment,
      *
      * @param Attachment $attachment
      *
@@ -102,9 +103,7 @@ class AttachmentHelper implements AttachmentHelperInterface
      */
     public function getAttachmentLocation(Attachment $attachment): string
     {
-        $path = sprintf('%s%sat-%d.data', storage_path('upload'), DIRECTORY_SEPARATOR, (int)$attachment->id);
-
-        return $path;
+        return sprintf('%sat-%d.data', DIRECTORY_SEPARATOR, (int)$attachment->id);
     }
 
     /**
@@ -187,12 +186,12 @@ class AttachmentHelper implements AttachmentHelperInterface
      * @param array|null $files
      *
      * @return bool
-     * @throws \Illuminate\Contracts\Encryption\EncryptException
+     * @throws FireflyException
      */
     public function saveAttachmentsForModel(object $model, ?array $files): bool
     {
-        if(!($model instanceof Model)) {
-            return false;
+        if (!($model instanceof Model)) {
+            return false; // @codeCoverageIgnore
         }
         Log::debug(sprintf('Now in saveAttachmentsForModel for model %s', \get_class($model)));
         if (\is_array($files)) {
@@ -266,11 +265,11 @@ class AttachmentHelper implements AttachmentHelperInterface
             $attachment->save();
             Log::debug('Created attachment:', $attachment->toArray());
 
-            $fileObject = $file->openFile('r');
+            $fileObject = $file->openFile();
             $fileObject->rewind();
 
-            if(0 === $file->getSize()) {
-                throw new FireflyException('Cannot upload empty or non-existent file.');
+            if (0 === $file->getSize()) {
+                throw new FireflyException('Cannot upload empty or non-existent file.'); // @codeCoverageIgnore
             }
 
             $content   = $fileObject->fread($file->getSize());

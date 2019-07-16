@@ -80,7 +80,7 @@ class ExportController extends Controller
 
         $repository->changeStatus($job, 'export_downloaded');
         /** @var LaravelResponse $response */
-        $response = response($content, 200);
+        $response = response($content);
         $response
             ->header('Content-Description', 'File Transfer')
             ->header('Content-Type', 'application/octet-stream')
@@ -118,8 +118,6 @@ class ExportController extends Controller
     {
         // create new export job.
         $job = $jobs->create();
-        // delete old ones.
-        $jobs->cleanup();
 
         // does the user have shared accounts?
         $formats       = array_keys(config('firefly.export_formats'));

@@ -24,6 +24,8 @@ declare(strict_types=1);
 
 return [
     'iban'                           => 'Il ne s\'agit pas d\'un IBAN valide.',
+    'zero_or_more'                   => 'Le montant ne peut pas être négatif.',
+    'date_or_time'                   => 'La valeur doit être une date ou une heure valide (ISO 8601).',
     'source_equals_destination'      => 'Le compte source est identique au compte de destination.',
     'unique_account_number_for_user' => 'Il semble que ce numéro de compte est déjà utilisé.',
     'unique_iban_for_user'           => 'Il semble que cet IBAN soit déjà utilisé.',
@@ -122,7 +124,7 @@ return [
     'present'                        => 'Le champs :attribute doit être rempli.',
     'amount_zero'                    => 'Le montant total ne peut pas être zéro.',
     'unique_piggy_bank_for_user'     => 'Le nom de la tirelire doit être unique.',
-    'secure_password'                => 'Ce n’est pas un mot de passe sécurisé. Veuillez essayer à nouveau. Pour plus d’informations, visitez http://bit.ly/FF3-password-security.',
+    'secure_password'                => 'Ce n\'est pas un mot de passe sécurisé. Veuillez essayez à nouveau. Pour plus d\'informations, visitez https://bit.ly/FF3-password-security',
     'valid_recurrence_rep_type'      => 'Type de répétition non valide pour des opérations périodiques.',
     'valid_recurrence_rep_moment'    => 'Période de répétition non valide pour ce type de répétition.',
     'invalid_account_info'           => 'Informations de compte non valides.',

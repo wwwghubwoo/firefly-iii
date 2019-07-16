@@ -25,7 +25,6 @@ declare(strict_types=1);
 
 namespace FireflyIII\Export;
 
-use Crypt;
 use DB;
 use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Export\Collector\AttachmentCollector;
@@ -41,8 +40,8 @@ use FireflyIII\Models\Transaction;
 use FireflyIII\Models\TransactionJournal;
 use FireflyIII\Repositories\Currency\CurrencyRepositoryInterface;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Storage;
 use Log;
-use Storage;
 use ZipArchive;
 
 /**
@@ -184,7 +183,7 @@ class ExpandedProcessor implements ProcessorInterface
     }
 
     /**
-     * Create a ZIP file.
+     * Create a ZIP file locally (!) in storage_path('export').
      *
      * @return bool
      *
@@ -193,11 +192,11 @@ class ExpandedProcessor implements ProcessorInterface
      */
     public function createZipFile(): bool
     {
-        $zip      = new ZipArchive;
-        $file     = $this->job->key . '.zip';
-        $fullPath = storage_path('export') . '/' . $file;
+        $zip       = new ZipArchive;
+        $file      = $this->job->key . '.zip';
+        $localPath = storage_path('export') . '/' . $file;
 
-        if (true !== $zip->open($fullPath, ZipArchive::CREATE)) {
+        if (true !== $zip->open($localPath, ZipArchive::CREATE)) {
             throw new FireflyException('Cannot store zip file.');
         }
         // for each file in the collection, add it to the zip file.
@@ -339,7 +338,7 @@ class ExpandedProcessor implements ProcessorInterface
         $return = [];
         /** @var Note $note */
         foreach ($notes as $note) {
-            if (\strlen(trim((string)$note->text)) > 0) {
+            if ('' !== trim((string)$note->text)) {
                 $id          = (int)$note->noteable_id;
                 $return[$id] = $note->text;
             }
@@ -368,7 +367,7 @@ class ExpandedProcessor implements ProcessorInterface
         foreach ($set as $entry) {
             $id            = (int)$entry->transaction_journal_id;
             $result[$id]   = $result[$id] ?? [];
-            $result[$id][] = Crypt::decrypt($entry->tag);
+            $result[$id][] = $entry->tag;
         }
 
         return $result;

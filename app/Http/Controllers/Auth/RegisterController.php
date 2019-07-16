@@ -23,7 +23,6 @@ declare(strict_types=1);
 
 namespace FireflyIII\Http\Controllers\Auth;
 
-use FireflyConfig;
 use FireflyIII\Http\Controllers\Controller;
 use FireflyIII\Support\Http\Controllers\CreateStuff;
 use FireflyIII\Support\Http\Controllers\RequestInformation;
@@ -71,9 +70,19 @@ class RegisterController extends Controller
     public function register(Request $request)
     {
         // is allowed to?
-        $singleUserMode = FireflyConfig::get('single_user_mode', config('firefly.configuration.single_user_mode'))->data;
-        $userCount      = User::count();
-        if (true === $singleUserMode && $userCount > 0) {
+        $allowRegistration = true;
+        $loginProvider     = config('firefly.login_provider');
+        $singleUserMode    = app('fireflyconfig')->get('single_user_mode', config('firefly.configuration.single_user_mode'))->data;
+        $userCount         = User::count();
+        if (true === $singleUserMode && $userCount > 0 && 'eloquent' === $loginProvider) {
+            $allowRegistration = false;
+        }
+
+        if ('eloquent' !== $loginProvider) {
+            $allowRegistration = false;
+        }
+
+        if (false === $allowRegistration) {
             $message = 'Registration is currently not available.';
 
             return view('error', compact('message'));
@@ -102,13 +111,26 @@ class RegisterController extends Controller
      */
     public function showRegistrationForm(Request $request)
     {
-        // is demo site?
-        $isDemoSite = FireflyConfig::get('is_demo_site', config('firefly.configuration.is_demo_site'))->data;
+        $allowRegistration = true;
+        $loginProvider     = config('firefly.login_provider');
+        $isDemoSite        = app('fireflyconfig')->get('is_demo_site', config('firefly.configuration.is_demo_site'))->data;
+        $singleUserMode    = app('fireflyconfig')->get('single_user_mode', config('firefly.configuration.single_user_mode'))->data;
+        $userCount         = User::count();
+        $pageTitle         = (string)trans('firefly.register_page_title');
 
-        // is allowed to?
-        $singleUserMode = FireflyConfig::get('single_user_mode', config('firefly.configuration.single_user_mode'))->data;
-        $userCount      = User::count();
-        if (true === $singleUserMode && $userCount > 0) {
+        if (true === $isDemoSite) {
+            $allowRegistration = false;
+        }
+
+        if (true === $singleUserMode && $userCount > 0 && 'eloquent' === $loginProvider) {
+            $allowRegistration = false;
+        }
+
+        if ('eloquent' !== $loginProvider) {
+            $allowRegistration = false;
+        }
+
+        if (false === $allowRegistration) {
             $message = 'Registration is currently not available.';
 
             return view('error', compact('message'));
@@ -116,7 +138,7 @@ class RegisterController extends Controller
 
         $email = $request->old('email');
 
-        return view('auth.register', compact('isDemoSite', 'email'));
+        return view('auth.register', compact('isDemoSite', 'email', 'pageTitle'));
     }
 
 }

@@ -45,7 +45,7 @@ class AccountTasker implements AccountTaskerInterface
      */
     public function __construct()
     {
-        if ('testing' === env('APP_ENV')) {
+        if ('testing' === config('app.env')) {
             Log::warning(sprintf('%s should not be instantiated in the TEST environment!', \get_class($this)));
         }
     }
@@ -254,7 +254,7 @@ class AccountTasker implements AccountTaskerInterface
         $keys = array_keys($expenses);
         foreach ($keys as $key) {
             $opposingId = $expenses[$key]['id'];
-            if(1===$countAccounts[$opposingId]) {
+            if (1 === $countAccounts[$opposingId]) {
                 $expenses[$key]['name'] = $expenses[$key]['original'];
             }
 

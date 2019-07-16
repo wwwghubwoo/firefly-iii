@@ -33,6 +33,7 @@ use FireflyIII\Http\Requests\TestRuleFormRequest;
 use FireflyIII\Models\Transaction;
 use FireflyIII\Models\TransactionJournal;
 use FireflyIII\Models\TransactionType;
+use FireflyIII\Repositories\Journal\JournalRepositoryInterface;
 use FireflyIII\Support\Binder\AccountList;
 use FireflyIII\Transformers\TransactionTransformer;
 use FireflyIII\User;
@@ -53,7 +54,6 @@ use Symfony\Component\HttpFoundation\ParameterBag;
  */
 trait RequestInformation
 {
-
     /**
      * Create data-array from a journal.
      *
@@ -65,8 +65,10 @@ trait RequestInformation
      */
     protected function arrayFromJournal(Request $request, TransactionJournal $journal): array // convert user input.
     {
-        $sourceAccounts      = $this->repository->getJournalSourceAccounts($journal);
-        $destinationAccounts = $this->repository->getJournalDestinationAccounts($journal);
+        /** @var JournalRepositoryInterface $repository */
+        $repository          = app(JournalRepositoryInterface::class);
+        $sourceAccounts      = $repository->getJournalSourceAccounts($journal);
+        $destinationAccounts = $repository->getJournalDestinationAccounts($journal);
         $array               = [
             'journal_description'    => $request->old('journal_description', $journal->description),
             'journal_amount'         => '0',
@@ -81,14 +83,14 @@ trait RequestInformation
             'tags'                   => implode(',', $journal->tags->pluck('tag')->toArray()),
 
             // all custom fields:
-            'interest_date'          => $request->old('interest_date', $this->repository->getMetaField($journal, 'interest_date')),
-            'book_date'              => $request->old('book_date', $this->repository->getMetaField($journal, 'book_date')),
-            'process_date'           => $request->old('process_date', $this->repository->getMetaField($journal, 'process_date')),
-            'due_date'               => $request->old('due_date', $this->repository->getMetaField($journal, 'due_date')),
-            'payment_date'           => $request->old('payment_date', $this->repository->getMetaField($journal, 'payment_date')),
-            'invoice_date'           => $request->old('invoice_date', $this->repository->getMetaField($journal, 'invoice_date')),
-            'internal_reference'     => $request->old('internal_reference', $this->repository->getMetaField($journal, 'internal_reference')),
-            'notes'                  => $request->old('notes', $this->repository->getNoteText($journal)),
+            'interest_date'          => $request->old('interest_date', $repository->getMetaField($journal, 'interest_date')),
+            'book_date'              => $request->old('book_date', $repository->getMetaField($journal, 'book_date')),
+            'process_date'           => $request->old('process_date', $repository->getMetaField($journal, 'process_date')),
+            'due_date'               => $request->old('due_date', $repository->getMetaField($journal, 'due_date')),
+            'payment_date'           => $request->old('payment_date', $repository->getMetaField($journal, 'payment_date')),
+            'invoice_date'           => $request->old('invoice_date', $repository->getMetaField($journal, 'invoice_date')),
+            'internal_reference'     => $request->old('internal_reference', $repository->getMetaField($journal, 'internal_reference')),
+            'notes'                  => $request->old('notes', $repository->getNoteText($journal)),
 
             // transactions.
             'transactions'           => $this->getTransactionDataFromJournal($journal),
@@ -163,7 +165,7 @@ trait RequestInformation
             }
             $baseHref   = route('index');
             $helpString = sprintf(
-                '<p><em><img src="%s/images/flags/%s.png" /> %s</em></p>', $baseHref, $originalLanguage, (string)trans('firefly.help_translating')
+                '<p><em><img alt="" src="%s/images/flags/%s.png" /> %s</em></p>', $baseHref, $originalLanguage, (string)trans('firefly.help_translating')
             );
             $content    = $helpString . $help->getFromGitHub($route, $language);
         }
@@ -229,7 +231,10 @@ trait RequestInformation
         $collector->setJournals(new Collection([$journal]));
         $set          = $collector->getTransactions();
         $transactions = [];
-        $transformer  = new TransactionTransformer(new ParameterBag);
+
+        /** @var TransactionTransformer $transformer */
+        $transformer = app(TransactionTransformer::class);
+        $transformer->setParameters(new ParameterBag());
         /** @var Transaction $transaction */
         foreach ($set as $transaction) {
             $res = [];
@@ -260,11 +265,11 @@ trait RequestInformation
     protected function getValidTriggerList(TestRuleFormRequest $request): array // process input
     {
         $triggers = [];
-        $data     = $request->get('rule_triggers');
+        $data     = $request->get('triggers');
         if (\is_array($data)) {
             foreach ($data as $index => $triggerInfo) {
                 $triggers[] = [
-                    'type'            => $triggerInfo['name'] ?? '',
+                    'type'            => $triggerInfo['type'] ?? '',
                     'value'           => $triggerInfo['value'] ?? '',
                     'stop_processing' => 1 === (int)($triggerInfo['stop_processing'] ?? '0'),
                 ];
@@ -358,6 +363,44 @@ trait RequestInformation
     }
 
     /**
+     * Get info from old input.
+     *
+     * @param $array
+     * @param $old
+     *
+     * @return array
+     *
+     * @SuppressWarnings(PHPMD.ExcessiveMethodLength)
+     * @SuppressWarnings(PHPMD.CyclomaticComplexity)
+     */
+    protected function updateWithPrevious($array, $old): array // update object with new info
+    {
+        if (0 === \count($old) || !isset($old['transactions'])) {
+            return $array;
+        }
+        $old = $old['transactions'];
+
+        foreach ($old as $index => $row) {
+            if (isset($array[$index])) {
+                /** @noinspection SlowArrayOperationsInLoopInspection */
+                $array[$index] = array_merge($array[$index], $row);
+                continue;
+            }
+            // take some info from first transaction, that should at least exist.
+            $array[$index]                            = $row;
+            $array[$index]['currency_id']             = $array[0]['currency_id'];
+            $array[$index]['currency_code']           = $array[0]['currency_code'] ?? '';
+            $array[$index]['currency_symbol']         = $array[0]['currency_symbol'] ?? '';
+            $array[$index]['foreign_amount']          = round($array[0]['foreign_destination_amount'] ?? '0', 12);
+            $array[$index]['foreign_currency_id']     = $array[0]['foreign_currency_id'];
+            $array[$index]['foreign_currency_code']   = $array[0]['foreign_currency_code'];
+            $array[$index]['foreign_currency_symbol'] = $array[0]['foreign_currency_symbol'];
+        }
+
+        return $array;
+    }
+
+    /**
      * Validate users new password.
      *
      * @param User   $user
@@ -394,7 +437,7 @@ trait RequestInformation
             $data,
             [
                 'email'    => 'required|string|email|max:255|unique:users',
-                'password' => 'required|string|secure_password|confirmed',
+                'password' => 'required|string|min:6|secure_password|confirmed',
             ]
         );
     }

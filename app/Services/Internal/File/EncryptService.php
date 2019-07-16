@@ -26,6 +26,7 @@ namespace FireflyIII\Services\Internal\File;
 use Crypt;
 use FireflyIII\Exceptions\FireflyException;
 use Illuminate\Contracts\Encryption\EncryptException;
+use Illuminate\Support\Facades\Storage;
 use Log;
 
 /**
@@ -38,7 +39,7 @@ class EncryptService
      */
     public function __construct()
     {
-        if ('testing' === env('APP_ENV')) {
+        if ('testing' === config('app.env')) {
             Log::warning(sprintf('%s should not be instantiated in the TEST environment!', \get_class($this)));
         }
     }
@@ -63,9 +64,8 @@ class EncryptService
             throw new FireflyException($message);
         }
         $newName = sprintf('%s.upload', $key);
-        $path    = storage_path('upload') . '/' . $newName;
-
-        file_put_contents($path, $content);
+        $disk    = Storage::disk('upload');
+        $disk->put($newName, $content);
     }
 
 }

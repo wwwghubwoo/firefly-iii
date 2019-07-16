@@ -30,12 +30,13 @@ Route::group(
     Route::post('keys', ['uses' => 'InstallController@keys', 'as' => 'keys']);
     Route::post('upgrade', ['uses' => 'InstallController@upgrade', 'as' => 'upgrade']);
     Route::post('verify', ['uses' => 'InstallController@verify', 'as' => 'verify']);
+    Route::post('decrypt', ['uses' => 'InstallController@decrypt', 'as' => 'decrypt']);
 }
 );
 
 Route::group(
     ['middleware' => 'binders-only','namespace' => 'FireflyIII\Http\Controllers\System', 'as' => 'cron.', 'prefix' => 'cron'], function () {
-    Route::get('run/{cliToken}', ['uses' => 'CronController@cron', 'as' => 'cron']);
+        Route::get('run/{cliToken}', ['uses' => 'CronController@cron', 'as' => 'cron']);
 }
 );
 
@@ -56,8 +57,8 @@ Route::group(
     // Password Reset Routes...
     Route::get('password/reset/{token}', ['uses' => 'Auth\ResetPasswordController@showResetForm', 'as' => 'password.reset']);
     Route::post('password/email', ['uses' => 'Auth\ForgotPasswordController@sendResetLinkEmail', 'as' => 'password.email']);
-    Route::post('password/reset', 'Auth\ResetPasswordController@reset');
-    Route::get('password/reset', 'Auth\ForgotPasswordController@showLinkRequestForm');
+    Route::post('password/reset',['uses' => 'Auth\ResetPasswordController@reset']);
+    Route::get('password/reset', ['uses' => 'Auth\ForgotPasswordController@showLinkRequestForm', 'as' => 'password.reset.request']);
 
     // Change email routes:
     Route::get('profile/confirm-email-change/{token}', ['uses' => 'ProfileController@confirmEmailChange', 'as' => 'profile.confirm-email-change']);
@@ -214,6 +215,8 @@ Route::group(
     Route::get('list/no-budget/all', ['uses' => 'Budget\ShowController@noBudgetAll', 'as' => 'no-budget-all']);
     Route::get('list/no-budget/{start_date?}/{end_date?}', ['uses' => 'Budget\ShowController@noBudget', 'as' => 'no-budget']);
 
+    // reorder budgets
+    Route::post('reorder', ['uses' => 'Budget\IndexController@reorder', 'as' => 'reorder']);
 
     // index
     Route::get('{start_date?}/{end_date?}', ['uses' => 'Budget\IndexController@index', 'as' => 'index']);
@@ -223,6 +226,8 @@ Route::group(
     Route::get('info/{start_date}/{end_date}', ['uses' => 'Budget\AmountController@infoIncome', 'as' => 'income.info']);
     Route::post('income', ['uses' => 'Budget\AmountController@postUpdateIncome', 'as' => 'income.post']);
     Route::post('amount/{budget}', ['uses' => 'Budget\AmountController@amount', 'as' => 'amount']);
+
+
 }
 );
 
@@ -269,6 +274,8 @@ Route::group(
     Route::get('edit/{currency}', ['uses' => 'CurrencyController@edit', 'as' => 'edit']);
     Route::get('delete/{currency}', ['uses' => 'CurrencyController@delete', 'as' => 'delete']);
     Route::get('default/{currency}', ['uses' => 'CurrencyController@defaultCurrency', 'as' => 'default']);
+    Route::get('enable/{currency}', ['uses' => 'CurrencyController@enableCurrency', 'as' => 'enable']);
+    Route::get('disable/{currency}', ['uses' => 'CurrencyController@disableCurrency', 'as' => 'disable']);
 
     Route::post('store', ['uses' => 'CurrencyController@store', 'as' => 'store']);
     Route::post('update/{currency}', ['uses' => 'CurrencyController@update', 'as' => 'update']);
@@ -365,7 +372,7 @@ Route::group(
     ['middleware' => 'user-full-auth', 'namespace' => 'FireflyIII\Http\Controllers\Chart', 'prefix' => 'chart/category', 'as' => 'chart.category.'],
     function () {
 
-        Route::get('frontpage', ['uses' => 'CategoryController@frontpage', 'as' => 'frontpage']);
+        Route::get('frontpage', ['uses' => 'CategoryController@frontPage', 'as' => 'frontpage']);
         Route::get('period/{category}', ['uses' => 'CategoryController@currentPeriod', 'as' => 'current']);
         Route::get('period/{category}/{date}', ['uses' => 'CategoryController@specificPeriod', 'as' => 'specific']);
         Route::get('all/{category}', ['uses' => 'CategoryController@all', 'as' => 'all']);
@@ -529,7 +536,7 @@ Route::group(
  * Budget Controller
  */
 Route::group(
-    ['middleware' => 'user-full-auth', 'namespace' => 'FireflyIII\Http\Controllers', 'prefix' => 'jscript', 'as' => 'javascript.'], function () {
+    ['middleware' => 'user-full-auth', 'namespace' => 'FireflyIII\Http\Controllers', 'prefix' => 'v1/jscript', 'as' => 'javascript.'], function () {
     Route::get('variables', ['uses' => 'JavascriptController@variables', 'as' => 'variables']);
     Route::get('accounts', ['uses' => 'JavascriptController@accounts', 'as' => 'accounts']);
     Route::get('currencies', ['uses' => 'JavascriptController@currencies', 'as' => 'currencies']);
@@ -543,19 +550,12 @@ Route::group(
     ['middleware' => 'user-full-auth', 'namespace' => 'FireflyIII\Http\Controllers', 'prefix' => 'json', 'as' => 'json.'], function () {
 
     // for auto complete
-    Route::get('expense-accounts', ['uses' => 'Json\AutoCompleteController@expenseAccounts', 'as' => 'expense-accounts']);
-    Route::get('all-accounts', ['uses' => 'Json\AutoCompleteController@allAccounts', 'as' => 'all-accounts']);
-    Route::get('revenue-accounts', ['uses' => 'Json\AutoCompleteController@revenueAccounts', 'as' => 'revenue-accounts']);
-    Route::get('asset-accounts', ['uses' => 'Json\AutoCompleteController@assetAccounts', 'as' => 'asset-accounts']);
-    Route::get('categories', ['uses' => 'Json\AutoCompleteController@categories', 'as' => 'categories']);
-    Route::get('budgets', ['uses' => 'Json\AutoCompleteController@budgets', 'as' => 'budgets']);
-    Route::get('tags', ['uses' => 'Json\AutoCompleteController@tags', 'as' => 'tags']);
-    Route::get('bills', ['uses' => 'Json\AutoCompleteController@bills', 'as' => 'bills']);
-    Route::get('currency-names', ['uses' => 'Json\AutoCompleteController@currencyNames', 'as' => 'currency-names']);
+
+
     Route::get('transaction-journals/all', ['uses' => 'Json\AutoCompleteController@allTransactionJournals', 'as' => 'all-transaction-journals']);
     Route::get('transaction-journals/with-id/{tj}', ['uses' => 'Json\AutoCompleteController@journalsWithId', 'as' => 'journals-with-id']);
     Route::get('transaction-journals/{what}', ['uses' => 'Json\AutoCompleteController@transactionJournals', 'as' => 'transaction-journals']);
-    Route::get('transaction-types', ['uses' => 'Json\AutoCompleteController@transactionTypes', 'as' => 'transaction-types']);
+//    Route::get('transaction-types', ['uses' => 'Json\AutoCompleteController@transactionTypes', 'as' => 'transaction-types']);
 
     // boxes
     Route::get('box/balance', ['uses' => 'Json\BoxController@balance', 'as' => 'box.balance']);
@@ -578,6 +578,7 @@ Route::group(
     Route::post('intro/enable/{route}/{specificPage?}', ['uses' => 'Json\IntroController@postEnable', 'as' => 'intro.enable']);
     Route::get('intro/{route}/{specificPage?}', ['uses' => 'Json\IntroController@getIntroSteps', 'as' => 'intro']);
 
+    Route::get('/{subject}', ['uses' => 'Json\AutoCompleteController@autoComplete', 'as' => 'autocomplete']);
 
 }
 );
@@ -879,6 +880,7 @@ Route::group(
     );
 
     Route::get('show/{tj}', ['uses' => 'TransactionController@show', 'as' => 'show']);
+    Route::get('debug/{tj}', ['uses' => 'Transaction\SingleController@debugShow', 'as' => 'debug']);
     Route::post('reorder', ['uses' => 'TransactionController@reorder', 'as' => 'reorder']);
     Route::post('reconcile', ['uses' => 'TransactionController@reconcile', 'as' => 'reconcile']);
 }

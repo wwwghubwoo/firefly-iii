@@ -34,20 +34,20 @@ use Log;
  */
 class TagFactory
 {
+    /** @var Collection */
+    private $tags;
+    /** @var User */
+    private $user;
+
     /**
      * Constructor.
      */
     public function __construct()
     {
-        if ('testing' === env('APP_ENV')) {
+        if ('testing' === config('app.env')) {
             Log::warning(sprintf('%s should not be instantiated in the TEST environment!', \get_class($this)));
         }
     }
-
-    /** @var Collection */
-    private $tags;
-    /** @var User */
-    private $user;
 
     /**
      * @param array $data
@@ -56,18 +56,21 @@ class TagFactory
      */
     public function create(array $data): ?Tag
     {
-        return Tag::create(
-            [
-                'user_id'     => $this->user->id,
-                'tag'         => $data['tag'],
-                'tagMode'     => 'nothing',
-                'date'        => $data['date'],
-                'description' => $data['description'],
-                'latitude'    => $data['latitude'],
-                'longitude '  => $data['longitude'],
-                'zoomLevel'   => $data['zoom_level'],
-            ]
-        );
+        $zoomLevel = 0 === (int)$data['zoom_level'] ? null : (int)$data['zoom_level'];
+        $latitude  = 0.0 === (float)$data['latitude'] ? null : (float)$data['latitude'];
+        $longitude = 0.0 === (float)$data['longitude'] ? null : (float)$data['longitude'];
+        $array     = [
+            'user_id'     => $this->user->id,
+            'tag'         => trim($data['tag']),
+            'tagMode'     => 'nothing',
+            'date'        => $data['date'],
+            'description' => $data['description'],
+            'latitude'    => $latitude,
+            'longitude'   => $longitude,
+            'zoomLevel'   => $zoomLevel,
+        ];
+
+        return Tag::create($array);
     }
 
     /**
@@ -77,6 +80,7 @@ class TagFactory
      */
     public function findOrCreate(string $tag): ?Tag
     {
+        $tag = trim($tag);
         if (null === $this->tags) {
             $this->tags = $this->user->tags()->get();
         }

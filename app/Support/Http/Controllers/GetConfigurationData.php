@@ -33,32 +33,6 @@ use Log;
  */
 trait GetConfigurationData
 {
-
-    /**
-     * All packages that are installed.
-     *
-     * @return array
-     */
-    protected function collectPackages(): array  // get configuration
-    {
-        $packages = [];
-        $file     = \dirname(__DIR__, 4) . '/vendor/composer/installed.json';
-        if (file_exists($file)) {
-            // file exists!
-            $content = file_get_contents($file);
-            $json    = json_decode($content, true);
-            foreach ($json as $package) {
-                $packages[]
-                    = [
-                    'name'    => $package['name'],
-                    'version' => $package['version'],
-                ];
-            }
-        }
-
-        return $packages;
-    }
-
     /**
      * Some common combinations.
      *
@@ -77,10 +51,7 @@ trait GetConfigurationData
             E_ALL & ~E_NOTICE & ~E_STRICT                                  => 'E_ALL & ~E_NOTICE & ~E_STRICT',
             E_COMPILE_ERROR | E_RECOVERABLE_ERROR | E_ERROR | E_CORE_ERROR => 'E_COMPILE_ERROR|E_RECOVERABLE_ERROR|E_ERROR|E_CORE_ERROR',
         ];
-        $result = (string)$value;
-        if (isset($array[$value])) {
-            $result = $array[$value];
-        }
+        $result = $array[$value] ?? (string)$value;
 
         return $result;
     }
@@ -169,12 +140,12 @@ trait GetConfigurationData
         }
 
         // last seven days:
-        $seven          = Carbon::create()->subDays(7);
+        $seven          = Carbon::now()->subDays(7);
         $index          = (string)trans('firefly.last_seven_days');
         $ranges[$index] = [$seven, new Carbon];
 
         // last 30 days:
-        $thirty         = Carbon::create()->subDays(30);
+        $thirty         = Carbon::now()->subDays(30);
         $index          = (string)trans('firefly.last_thirty_days');
         $ranges[$index] = [$thirty, new Carbon];
 
@@ -214,7 +185,7 @@ trait GetConfigurationData
         $routeKey = '';
 
         // user is on page with specific instructions:
-        if (\strlen($specificPage) > 0) {
+        if ('' !== $specificPage) {
             $routeKey = str_replace('.', '_', $route);
             $elements = config(sprintf('intro.%s', $routeKey . '_' . $specificPage));
             if (\is_array($elements) && \count($elements) > 0) {

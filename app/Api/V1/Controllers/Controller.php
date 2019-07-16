@@ -100,17 +100,26 @@ class Controller extends BaseController
         // some date fields:
         $dates = ['start', 'end', 'date'];
         foreach ($dates as $field) {
-            $date = request()->get($field);
+            $date = request()->query->get($field);
             $obj  = null;
             if (null !== $date) {
                 try {
-                    $obj = new Carbon($date);
+                    $obj = Carbon::parse($date);
                 } catch (InvalidDateException $e) {
                     // don't care
                     Log::error(sprintf('Invalid date exception in API controller: %s', $e->getMessage()));
                 }
             }
             $bag->set($field, $obj);
+        }
+
+        // integer fields:
+        $integers = ['limit'];
+        foreach ($integers as $integer) {
+            $value = request()->query->get($integer);
+            if (null !== $value) {
+                $bag->set($integer, (int)$value);
+            }
         }
 
         return $bag;

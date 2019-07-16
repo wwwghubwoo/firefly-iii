@@ -24,6 +24,7 @@ declare(strict_types=1);
 
 namespace FireflyIII\Factory;
 
+use Carbon\Carbon;
 use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Models\TransactionJournal;
 use FireflyIII\Services\Internal\Support\JournalServiceTrait;
@@ -46,7 +47,7 @@ class TransactionJournalFactory
      */
     public function __construct()
     {
-        if ('testing' === env('APP_ENV')) {
+        if ('testing' === config('app.env')) {
             Log::warning(sprintf('%s should not be instantiated in the TEST environment!', \get_class($this)));
         }
     }
@@ -70,14 +71,18 @@ class TransactionJournalFactory
         Log::debug(sprintf('Going to store a %s', $type->type));
         $description = app('steam')->cleanString($data['description']);
         $description = str_replace(["\n", "\t", "\r"], "\x20", $description);
-        $journal     = TransactionJournal::create(
+        /** @var Carbon $carbon */
+        $carbon = $data['date'];
+        $carbon->setTimezone(config('app.timezone'));
+
+        $journal = TransactionJournal::create(
             [
                 'user_id'                 => $data['user'],
                 'transaction_type_id'     => $type->id,
                 'bill_id'                 => null,
                 'transaction_currency_id' => $defaultCurrency->id,
                 'description'             => $description,
-                'date'                    => $data['date']->format('Y-m-d'),
+                'date'                    => $carbon->format('Y-m-d H:i:s'),
                 'order'                   => 0,
                 'tag_count'               => 0,
                 'completed'               => 0,
@@ -92,12 +97,13 @@ class TransactionJournalFactory
         /** @var TransactionFactory $factory */
         $factory = app(TransactionFactory::class);
         $factory->setUser($this->user);
-
+        $totalAmount = '0';
         Log::debug(sprintf('Found %d transactions in array.', \count($data['transactions'])));
         /** @var array $trData */
         foreach ($data['transactions'] as $index => $trData) {
             Log::debug(sprintf('Now storing transaction %d of %d', $index + 1, \count($data['transactions'])));
             $factory->createPair($journal, $trData);
+            $totalAmount = bcadd($totalAmount, (string)($trData['amount'] ?? '0'));
         }
         $journal->completed = true;
         $journal->save();

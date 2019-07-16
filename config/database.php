@@ -28,7 +28,7 @@ $username    = '';
 $password    = '';
 $database    = '';
 
-if (!($databaseUrl === false)) {
+if (!(false === $databaseUrl)) {
     $options  = parse_url($databaseUrl);
     $host     = $options['host'];
     $username = $options['user'];
@@ -57,19 +57,22 @@ return [
             'collation'   => 'utf8mb4_unicode_ci',
             'prefix'      => '',
             'strict'      => true,
-            'engine'      => null,
+            'engine'      => 'InnoDB',
         ],
         'pgsql'  => [
-            'driver'   => 'pgsql',
-            'host'     => envNonEmpty('DB_HOST', $host),
-            'port'     => envNonEmpty('DB_PORT', '5432'),
-            'database' => envNonEmpty('DB_DATABASE', $database),
-            'username' => envNonEmpty('DB_USERNAME', $username),
-            'password' => env('DB_PASSWORD', $password),
-            'charset'  => 'utf8',
-            'prefix'   => '',
-            'schema'   => 'public',
-            'sslmode'  => 'prefer',
+            'driver'      => 'pgsql',
+            'host'        => envNonEmpty('DB_HOST', $host),
+            'port'        => envNonEmpty('DB_PORT', '5432'),
+            'database'    => envNonEmpty('DB_DATABASE', $database),
+            'username'    => envNonEmpty('DB_USERNAME', $username),
+            'password'    => env('DB_PASSWORD', $password),
+            'charset'     => 'utf8',
+            'prefix'      => '',
+            'schema'      => 'public',
+            'sslmode'     => envNonEmpty('PGSQL_SSL_MODE', 'prefer'),
+            'sslcert'     => envNonEmpty('PGSQL_SSL_CERT'),
+            'sslkey'      => envNonEmpty('PGSQL_SSL_KEY'),
+            'sslrootcert' => envNonEmpty('PGSQL_SSL_ROOT_CERT'),
         ],
         'sqlsrv' => [
             'driver'   => 'sqlsrv',

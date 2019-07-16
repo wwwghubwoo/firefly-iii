@@ -24,6 +24,7 @@ namespace FireflyIII\Support;
 
 use Carbon\Carbon;
 use FireflyIII\Exceptions\FireflyException;
+use FireflyIII\Helpers\FiscalHelperInterface;
 use Log;
 
 /**
@@ -46,12 +47,23 @@ class Navigation
         $add  = ($skip + 1);
 
         $functionMap = [
-            '1D'      => 'addDays', 'daily' => 'addDays',
-            '1W'      => 'addWeeks', 'weekly' => 'addWeeks', 'week' => 'addWeeks',
-            '1M'      => 'addMonths', 'month' => 'addMonths', 'monthly' => 'addMonths', '3M' => 'addMonths',
-            'quarter' => 'addMonths', 'quarterly' => 'addMonths', '6M' => 'addMonths', 'half-year' => 'addMonths',
-            'year'    => 'addYears', 'yearly' => 'addYears', '1Y' => 'addYears',
-            'custom'  => 'addMonths', // custom? just add one month.
+            '1D'        => 'addDays',
+            'daily'     => 'addDays',
+            '1W'        => 'addWeeks',
+            'weekly'    => 'addWeeks',
+            'week'      => 'addWeeks',
+            '1M'        => 'addMonths',
+            'month'     => 'addMonths',
+            'monthly'   => 'addMonths',
+            '3M'        => 'addMonths',
+            'quarter'   => 'addMonths',
+            'quarterly' => 'addMonths',
+            '6M'        => 'addMonths',
+            'half-year' => 'addMonths',
+            'year'      => 'addYears',
+            'yearly'    => 'addYears',
+            '1Y'        => 'addYears',
+            'custom'    => 'addMonths', // custom? just add one month.
         ];
         $modifierMap = [
             'quarter'   => 3,
@@ -70,11 +82,16 @@ class Navigation
         $function = $functionMap[$repeatFreq];
         $date->$function($add);
 
-        // if period is 1M and diff in month is 2 and new DOM = 1, sub a day:
+        // if period is 1M and diff in month is 2 and new DOM > 1, sub a number of days:
+        // result is:
+        // '2019-01-29', '2019-02-28'
+        // '2019-01-30', '2019-02-28'
+        // '2019-01-31', '2019-02-28'
+
         $months     = ['1M', 'month', 'monthly'];
         $difference = $date->month - $theDate->month;
-        if (2 === $difference && 1 === $date->day && \in_array($repeatFreq, $months, true)) {
-            $date->subDay();
+        if (2 === $difference && $date->day > 0 && \in_array($repeatFreq, $months, true)) {
+            $date->subDays($date->day);
         }
 
         return $date;
@@ -134,7 +151,7 @@ class Navigation
         // per year
         while ($perYearEnd >= $perYearStart) {
             $perYearEnd = $this->startOfPeriod($perYearEnd, '1Y');
-            $currentEnd = $this->endOfPeriod($perYearEnd, '1Y')->subDay()->endOfDay();
+            $currentEnd = $this->endOfPeriod($perYearEnd, '1Y')->endOfDay();
             if ($currentEnd->gt($start)) {
                 $periods[] = [
                     'start'  => $perYearEnd,
@@ -161,11 +178,22 @@ class Navigation
         $currentEnd = clone $end;
 
         $functionMap = [
-            '1D'   => 'endOfDay', 'daily' => 'endOfDay',
-            '1W'   => 'addWeek', 'week' => 'addWeek', 'weekly' => 'addWeek',
-            '1M'   => 'addMonth', 'month' => 'addMonth', 'monthly' => 'addMonth',
-            '3M'   => 'addMonths', 'quarter' => 'addMonths', 'quarterly' => 'addMonths', '6M' => 'addMonths', 'half-year' => 'addMonths',
-            'year' => 'addYear', 'yearly' => 'addYear', '1Y' => 'addYear',
+            '1D'        => 'endOfDay',
+            'daily'     => 'endOfDay',
+            '1W'        => 'addWeek',
+            'week'      => 'addWeek',
+            'weekly'    => 'addWeek',
+            '1M'        => 'addMonth',
+            'month'     => 'addMonth',
+            'monthly'   => 'addMonth',
+            '3M'        => 'addMonths',
+            'quarter'   => 'addMonths',
+            'quarterly' => 'addMonths',
+            '6M'        => 'addMonths',
+            'half-year' => 'addMonths',
+            'year'      => 'addYear',
+            'yearly'    => 'addYear',
+            '1Y'        => 'addYear',
         ];
         $modifierMap = [
             'quarter'   => 3,
@@ -175,7 +203,7 @@ class Navigation
             '6M'        => 6,
         ];
 
-        $subDay = ['week', 'weekly', '1W', 'month', 'monthly', '1M', '3M', 'quarter', 'quarterly', '6M', 'half-year', 'year', 'yearly'];
+        $subDay = ['week', 'weekly', '1W', 'month', 'monthly', '1M', '3M', 'quarter', 'quarterly', '6M', 'half-year', '1Y', 'year', 'yearly'];
 
         // if the range is custom, the end of the period
         // is another X days (x is the difference between start)
@@ -199,14 +227,15 @@ class Navigation
 
         if (isset($modifierMap[$repeatFreq])) {
             $currentEnd->$function($modifierMap[$repeatFreq]);
-
             if (\in_array($repeatFreq, $subDay, true)) {
                 $currentEnd->subDay();
             }
+            $currentEnd->endOfDay();
 
             return $currentEnd;
         }
         $currentEnd->$function();
+        $currentEnd->endOfDay();
         if (\in_array($repeatFreq, $subDay, true)) {
             $currentEnd->subDay();
         }
@@ -583,7 +612,6 @@ class Navigation
             '1W'     => 'endOfWeek',
             '1M'     => 'endOfMonth',
             '3M'     => 'lastOfQuarter',
-            '1Y'     => 'endOfYear',
             'custom' => 'startOfMonth', // this only happens in test situations.
         ];
         $end         = clone $start;
@@ -604,6 +632,16 @@ class Navigation
 
             return $end;
         }
+
+        // make sure 1Y takes the fiscal year into account.
+        if ('1Y' === $range) {
+            /** @var FiscalHelperInterface $fiscalHelper */
+            $fiscalHelper = app(FiscalHelperInterface::class);
+
+            return $fiscalHelper->endOfFiscalYear($end);
+        }
+
+
         throw new FireflyException(sprintf('updateEndDate cannot handle range "%s"', $range));
     }
 
@@ -622,7 +660,6 @@ class Navigation
             '1W'     => 'startOfWeek',
             '1M'     => 'startOfMonth',
             '3M'     => 'firstOfQuarter',
-            '1Y'     => 'startOfYear',
             'custom' => 'startOfMonth', // this only happens in test situations.
         ];
         if (isset($functionMap[$range])) {
@@ -641,6 +678,15 @@ class Navigation
 
             return $start;
         }
+
+        // make sure 1Y takes the fiscal year into account.
+        if ('1Y' === $range) {
+            /** @var FiscalHelperInterface $fiscalHelper */
+            $fiscalHelper = app(FiscalHelperInterface::class);
+
+            return $fiscalHelper->startOfFiscalYear($start);
+        }
+
         throw new FireflyException(sprintf('updateStartDate cannot handle range "%s"', $range));
     }
 }

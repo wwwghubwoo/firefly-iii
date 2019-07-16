@@ -27,6 +27,7 @@ namespace Tests\Feature\Controllers\Category;
 use Carbon\Carbon;
 use FireflyIII\Helpers\Collector\TransactionCollectorInterface;
 use FireflyIII\Helpers\Filter\InternalTransferFilter;
+use FireflyIII\Helpers\FiscalHelperInterface;
 use FireflyIII\Models\TransactionJournal;
 use FireflyIII\Repositories\Account\AccountRepositoryInterface;
 use FireflyIII\Repositories\Category\CategoryRepositoryInterface;
@@ -63,13 +64,17 @@ class NoCategoryControllerTest extends TestCase
      */
     public function testNoCategory(string $range): void
     {
+        Log::info('Test noCategory()');
         // mock stuff
         $collector     = $this->mock(TransactionCollectorInterface::class);
         $categoryRepos = $this->mock(CategoryRepositoryInterface::class);
         $accountRepos  = $this->mock(AccountRepositoryInterface::class);
         $journalRepos  = $this->mock(JournalRepositoryInterface::class);
         $userRepos     = $this->mock(UserRepositoryInterface::class);
+        $fiscalHelper  = $this->mock(FiscalHelperInterface::class);
 
+        $fiscalHelper->shouldReceive('startOfFiscalYear')->andReturn(new Carbon);
+        $fiscalHelper->shouldReceive('endOfFiscalYear')->andReturn(new Carbon);
 
         // get the journal with the most recent date for firstNull:
         $journal = $this->user()->transactionJournals()->orderBy('date', 'DESC')->first();
@@ -105,13 +110,18 @@ class NoCategoryControllerTest extends TestCase
      */
     public function testNoCategoryAll(string $range): void
     {
-        Log::debug('Test nocategoryAll()');
+        Log::info('Test nocategoryAll()');
         // mock stuff
         $collector     = $this->mock(TransactionCollectorInterface::class);
         $categoryRepos = $this->mock(CategoryRepositoryInterface::class);
         $accountRepos  = $this->mock(AccountRepositoryInterface::class);
         $journalRepos  = $this->mock(JournalRepositoryInterface::class);
         $userRepos     = $this->mock(UserRepositoryInterface::class);
+        $fiscalHelper  = $this->mock(FiscalHelperInterface::class);
+
+        $fiscalHelper->shouldReceive('startOfFiscalYear')->andReturn(new Carbon);
+        $fiscalHelper->shouldReceive('endOfFiscalYear')->andReturn(new Carbon);
+
         $journalRepos->shouldReceive('firstNull')->twice()->andReturn(TransactionJournal::first());
         $userRepos->shouldReceive('hasRole')->withArgs([Mockery::any(), 'owner'])->andReturn(true)->atLeast()->once();
 
@@ -143,13 +153,17 @@ class NoCategoryControllerTest extends TestCase
      */
     public function testNoCategoryDate(string $range): void
     {
-        Log::debug('Test nocategorydate()');
+        Log::info('Test nocategorydate()');
         // mock stuff
         $collector     = $this->mock(TransactionCollectorInterface::class);
         $categoryRepos = $this->mock(CategoryRepositoryInterface::class);
         $accountRepos  = $this->mock(AccountRepositoryInterface::class);
         $journalRepos  = $this->mock(JournalRepositoryInterface::class);
         $userRepos     = $this->mock(UserRepositoryInterface::class);
+        $fiscalHelper  = $this->mock(FiscalHelperInterface::class);
+        $date          = new Carbon;
+        $fiscalHelper->shouldReceive('endOfFiscalYear')->atLeast()->once()->andReturn($date);
+        $fiscalHelper->shouldReceive('startOfFiscalYear')->atLeast()->once()->andReturn($date);
 
         $journalRepos->shouldReceive('firstNull')->twice()->andReturn(TransactionJournal::first());
         $userRepos->shouldReceive('hasRole')->withArgs([Mockery::any(), 'owner'])->andReturn(true)->atLeast()->once();

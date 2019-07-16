@@ -27,6 +27,7 @@ use FireflyIII\Models\Transaction;
 use FireflyIII\Services\Internal\Support\TransactionServiceTrait;
 use FireflyIII\User;
 use Log;
+
 /**
  * Class TransactionUpdateService
  */
@@ -34,18 +35,18 @@ class TransactionUpdateService
 {
     use TransactionServiceTrait;
 
+    /** @var User */
+    private $user;
+
     /**
      * Constructor.
      */
     public function __construct()
     {
-        if ('testing' === env('APP_ENV')) {
+        if ('testing' === config('app.env')) {
             Log::warning(sprintf('%s should not be instantiated in the TEST environment!', \get_class($this)));
         }
     }
-
-    /** @var User */
-    private $user;
 
     /**
      * @param int $transactionId
@@ -87,13 +88,12 @@ class TransactionUpdateService
      */
     public function update(Transaction $transaction, array $data): Transaction
     {
-        $currency    = $this->findCurrency($data['currency_id'], $data['currency_code']);
-        $journal     = $transaction->transactionJournal;
-        $description = $journal->description === $data['description'] ? null : $data['description'];
-        $amount      = (string)$data['amount'];
-        $account     = null;
+        $currency = $this->findCurrency($data['currency_id'], $data['currency_code']);
+        $journal  = $transaction->transactionJournal;
+        $amount   = (string)$data['amount'];
+        $account  = null;
         // update description:
-        $transaction->description = $description;
+        $transaction->description = $data['description'];
         $foreignAmount            = null;
         if ((float)$transaction->amount < 0) {
             // this is the source transaction.
@@ -112,7 +112,7 @@ class TransactionUpdateService
         }
 
         // update the actual transaction:
-        $transaction->description             = $description;
+        $transaction->description             = $data['description'];
         $transaction->amount                  = $amount;
         $transaction->foreign_amount          = null;
         $transaction->transaction_currency_id = null === $currency ? $transaction->transaction_currency_id : $currency->id;

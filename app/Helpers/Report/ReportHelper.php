@@ -33,6 +33,7 @@ use FireflyIII\Repositories\Bill\BillRepositoryInterface;
 use FireflyIII\Repositories\Budget\BudgetRepositoryInterface;
 use Illuminate\Support\Collection;
 use Log;
+
 /**
  * Class ReportHelper.
  *
@@ -53,7 +54,7 @@ class ReportHelper implements ReportHelperInterface
     {
         $this->budgetRepository = $budgetRepository;
 
-        if ('testing' === env('APP_ENV')) {
+        if ('testing' === config('app.env')) {
             Log::warning(sprintf('%s should not be instantiated in the TEST environment!', \get_class($this)));
         }
 

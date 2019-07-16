@@ -25,6 +25,7 @@ namespace FireflyIII\Repositories\Budget;
 use Carbon\Carbon;
 use Exception;
 use FireflyIII\Exceptions\FireflyException;
+use FireflyIII\Factory\TransactionCurrencyFactory;
 use FireflyIII\Helpers\Collector\TransactionCollectorInterface;
 use FireflyIII\Models\AccountType;
 use FireflyIII\Models\AvailableBudget;
@@ -36,6 +37,7 @@ use FireflyIII\Models\Transaction;
 use FireflyIII\Models\TransactionCurrency;
 use FireflyIII\Models\TransactionType;
 use FireflyIII\Repositories\Account\AccountRepositoryInterface;
+use FireflyIII\Services\Internal\Destroy\BudgetDestroyService;
 use FireflyIII\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -59,7 +61,7 @@ class BudgetRepository implements BudgetRepositoryInterface
      */
     public function __construct()
     {
-        if ('testing' === env('APP_ENV')) {
+        if ('testing' === config('app.env')) {
             Log::warning(sprintf('%s should not be instantiated in the TEST environment!', \get_class($this)));
         }
     }
@@ -107,6 +109,7 @@ class BudgetRepository implements BudgetRepositoryInterface
         } catch (Exception $e) {
             Log::debug(sprintf('Could not delete budget limit: %s', $e->getMessage()));
         }
+        Budget::where('order', 0)->update(['order' => 100]);
 
         // do the clean up by hand because Sqlite can be tricky with this.
         $budgetLimits = BudgetLimit::orderBy('created_at', 'DESC')->get(['id', 'budget_id', 'start_date', 'end_date']);
@@ -182,11 +185,9 @@ class BudgetRepository implements BudgetRepositoryInterface
      */
     public function destroy(Budget $budget): bool
     {
-        try {
-            $budget->delete();
-        } catch (Exception $e) {
-            Log::error(sprintf('Could not delete budget: %s', $e->getMessage()));
-        }
+        /** @var BudgetDestroyService $service */
+        $service = app(BudgetDestroyService::class);
+        $service->destroy($budget);
 
         return true;
     }
@@ -215,26 +216,6 @@ class BudgetRepository implements BudgetRepositoryInterface
         } catch (Exception $e) {
             Log::info(sprintf('Could not delete budget limit: %s', $e->getMessage()));
         }
-    }
-
-    /**
-     * Find a budget.
-     *
-     * @param string $name
-     *
-     * @return Budget|null
-     */
-    public function findByName(string $name): ?Budget
-    {
-        $budgets = $this->user->budgets()->get(['budgets.*']);
-        /** @var Budget $budget */
-        foreach ($budgets as $budget) {
-            if ($budget->name === $name) {
-                return $budget;
-            }
-        }
-
-        return null;
     }
 
     /**
@@ -289,11 +270,14 @@ class BudgetRepository implements BudgetRepositoryInterface
     public function getActiveBudgets(): Collection
     {
         /** @var Collection $set */
-        $set = $this->user->budgets()->where('active', 1)->get();
+        $set = $this->user->budgets()->where('active', 1)
+                          ->get();
 
         $set = $set->sortBy(
             function (Budget $budget) {
-                return strtolower($budget->name);
+                $str = str_pad((string)$budget->order, 4, '0', STR_PAD_LEFT) . strtolower($budget->name);
+
+                return $str;
             }
         );
 
@@ -396,6 +380,26 @@ class BudgetRepository implements BudgetRepositoryInterface
     }
 
     /**
+     * @param Carbon $start
+     * @param Carbon $end
+     *
+     * @return array
+     */
+    public function getAvailableBudgetWithCurrency(Carbon $start, Carbon $end): array
+    {
+        $return           = [];
+        $availableBudgets = $this->user->availableBudgets()
+                                       ->where('start_date', $start->format('Y-m-d 00:00:00'))
+                                       ->where('end_date', $end->format('Y-m-d 00:00:00'))->get();
+        /** @var AvailableBudget $availableBudget */
+        foreach ($availableBudgets as $availableBudget) {
+            $return[$availableBudget->transaction_currency_id] = $availableBudget->amount;
+        }
+
+        return $return;
+    }
+
+    /**
      * Returns all available budget objects.
      *
      * @return Collection
@@ -434,6 +438,8 @@ class BudgetRepository implements BudgetRepositoryInterface
 
         return bcdiv($total, (string)$days);
     }
+
+    /** @noinspection MoreThanThreeArgumentsInspection */
 
     /**
      * @param Budget $budget
@@ -500,7 +506,6 @@ class BudgetRepository implements BudgetRepositoryInterface
         return $set;
     }
 
-    /** @noinspection MoreThanThreeArgumentsInspection */
     /**
      * This method is being used to generate the budget overview in the year/multi-year report. Its used
      * in both the year/multi-year budget overview AND in the accompanying chart.
@@ -554,7 +559,9 @@ class BudgetRepository implements BudgetRepositoryInterface
 
         $set = $set->sortBy(
             function (Budget $budget) {
-                return strtolower($budget->name);
+                $str = str_pad((string)$budget->order, 4, '0', STR_PAD_LEFT) . strtolower($budget->name);
+
+                return $str;
             }
         );
 
@@ -583,12 +590,16 @@ class BudgetRepository implements BudgetRepositoryInterface
 
         $set = $set->sortBy(
             function (Budget $budget) {
-                return strtolower($budget->name);
+                $str = str_pad((string)$budget->order, 4, '0', STR_PAD_LEFT) . strtolower($budget->name);
+
+                return $str;
             }
         );
 
         return $set;
     }
+
+    /** @noinspection MoreThanThreeArgumentsInspection */
 
     /**
      * @param Collection $accounts
@@ -624,7 +635,20 @@ class BudgetRepository implements BudgetRepositoryInterface
         return $result;
     }
 
+    /**
+     * @param string $query
+     *
+     * @return Collection
+     */
+    public function searchBudget(string $query): Collection
+    {
+        $query = sprintf('%%%s%%', $query);
+
+        return $this->user->budgets()->where('name', 'LIKE', $query)->get();
+    }
+
     /** @noinspection MoreThanThreeArgumentsInspection */
+
     /**
      * @param TransactionCurrency $currency
      * @param Carbon              $start
@@ -653,6 +677,16 @@ class BudgetRepository implements BudgetRepositoryInterface
     }
 
     /**
+     * @param Budget $budget
+     * @param int    $order
+     */
+    public function setBudgetOrder(Budget $budget, int $order): void
+    {
+        $budget->order = $order;
+        $budget->save();
+    }
+
+    /**
      * @param User $user
      */
     public function setUser(User $user): void
@@ -660,7 +694,6 @@ class BudgetRepository implements BudgetRepositoryInterface
         $this->user = $user;
     }
 
-    /** @noinspection MoreThanThreeArgumentsInspection */
     /**
      * @param Collection $budgets
      * @param Collection $accounts
@@ -686,6 +719,55 @@ class BudgetRepository implements BudgetRepositoryInterface
         $set = $collector->getTransactions();
 
         return (string)$set->sum('transaction_amount');
+    }
+
+    /**
+     * @param Collection $budgets
+     * @param Collection $accounts
+     * @param Carbon     $start
+     * @param Carbon     $end
+     *
+     * @return array
+     */
+    public function spentInPeriodMc(Collection $budgets, Collection $accounts, Carbon $start, Carbon $end): array
+    {
+        /** @var TransactionCollectorInterface $collector */
+        $collector = app(TransactionCollectorInterface::class);
+        $collector->setUser($this->user);
+        $collector->setRange($start, $end)->setBudgets($budgets)->withBudgetInformation();
+
+        if ($accounts->count() > 0) {
+            $collector->setAccounts($accounts);
+        }
+        if (0 === $accounts->count()) {
+            $collector->setAllAssetAccounts();
+        }
+
+        $set        = $collector->getTransactions();
+        $return     = [];
+        $total      = [];
+        $currencies = [];
+        /** @var Transaction $transaction */
+        foreach ($set as $transaction) {
+            $code = $transaction->transaction_currency_code;
+            if (!isset($currencies[$code])) {
+                $currencies[$code] = $transaction->transactionCurrency;
+            }
+            $total[$code] = isset($total[$code]) ? bcadd($total[$code], $transaction->transaction_amount) : $transaction->transaction_amount;
+        }
+        foreach ($total as $code => $spent) {
+            /** @var TransactionCurrency $currency */
+            $currency = $currencies[$code];
+            $return[] = [
+                'currency_id'             => $currency->id,
+                'currency_code'           => $code,
+                'currency_symbol'         => $currency->symbol,
+                'currency_decimal_places' => $currency->decimal_places,
+                'amount'                  => round($spent, $currency->decimal_places),
+            ];
+        }
+
+        return $return;
     }
 
     /**
@@ -724,6 +806,54 @@ class BudgetRepository implements BudgetRepositoryInterface
     }
 
     /**
+     * @param Collection $accounts
+     * @param Carbon     $start
+     * @param Carbon     $end
+     *
+     * @return array
+     */
+    public function spentInPeriodWoBudgetMc(Collection $accounts, Carbon $start, Carbon $end): array
+    {
+        /** @var TransactionCollectorInterface $collector */
+        $collector = app(TransactionCollectorInterface::class);
+        $collector->setUser($this->user);
+        $collector->setRange($start, $end)->setTypes([TransactionType::WITHDRAWAL])->withoutBudget();
+
+        if ($accounts->count() > 0) {
+            $collector->setAccounts($accounts);
+        }
+        if (0 === $accounts->count()) {
+            $collector->setAllAssetAccounts();
+        }
+
+        $set        = $collector->getTransactions();
+        $return     = [];
+        $total      = [];
+        $currencies = [];
+        /** @var Transaction $transaction */
+        foreach ($set as $transaction) {
+            $code = $transaction->transaction_currency_code;
+            if (!isset($currencies[$code])) {
+                $currencies[$code] = $transaction->transactionCurrency;
+            }
+            $total[$code] = isset($total[$code]) ? bcadd($total[$code], $transaction->transaction_amount) : $transaction->transaction_amount;
+        }
+        foreach ($total as $code => $spent) {
+            /** @var TransactionCurrency $currency */
+            $currency = $currencies[$code];
+            $return[] = [
+                'currency_id'             => $currency->id,
+                'currency_code'           => $code,
+                'currency_symbol'         => $currency->symbol,
+                'currency_decimal_places' => $currency->decimal_places,
+                'amount'                  => round($spent, $currency->decimal_places),
+            ];
+        }
+
+        return $return;
+    }
+
+    /**
      * @param array $data
      *
      * @return Budget
@@ -744,7 +874,6 @@ class BudgetRepository implements BudgetRepositoryInterface
     /**
      * @param array $data
      *
-     * @throws FireflyException
      * @return BudgetLimit
      */
     public function storeBudgetLimit(array $data): BudgetLimit
@@ -753,29 +882,40 @@ class BudgetRepository implements BudgetRepositoryInterface
         /** @var Budget $budget */
         $budget = $data['budget'];
 
-        // find limit with same date range.
-        // if it exists, throw error.
-        $limits = $budget->budgetlimits()
-                         ->where('budget_limits.start_date', $data['start_date']->format('Y-m-d 00:00:00'))
-                         ->where('budget_limits.end_date', $data['end_date']->format('Y-m-d 00:00:00'))
-                         ->get(['budget_limits.*'])->count();
-        Log::debug(sprintf('Found %d budget limits.', $limits));
-        if ($limits > 0) {
-            throw new FireflyException('A budget limit for this budget, and this date range already exists. You must update the existing one.');
+        // if no currency has been provided, use the user's default currency:
+        /** @var TransactionCurrencyFactory $factory */
+        $factory  = app(TransactionCurrencyFactory::class);
+        $currency = $factory->find($data['currency_id'] ?? null, $data['currency_code'] ?? null);
+        if (null === $currency) {
+            $currency = app('amount')->getDefaultCurrencyByUser($this->user);
         }
 
+        // find limit with same date range.
+        // if it exists, return that one.
+        $limit = $budget->budgetlimits()
+                        ->where('budget_limits.start_date', $data['start']->format('Y-m-d 00:00:00'))
+                        ->where('budget_limits.end_date', $data['end']->format('Y-m-d 00:00:00'))
+                        ->where('budget_limits.transaction_currency_id', $currency->id)
+                        ->get(['budget_limits.*'])->first();
+        if (null !== $limit) {
+            return $limit;
+        }
         Log::debug('No existing budget limit, create a new one');
+
         // or create one and return it.
         $limit = new BudgetLimit;
         $limit->budget()->associate($budget);
-        $limit->start_date = $data['start_date']->format('Y-m-d 00:00:00');
-        $limit->end_date   = $data['end_date']->format('Y-m-d 00:00:00');
-        $limit->amount     = $data['amount'];
+        $limit->start_date              = $data['start']->format('Y-m-d 00:00:00');
+        $limit->end_date                = $data['end']->format('Y-m-d 00:00:00');
+        $limit->amount                  = $data['amount'];
+        $limit->transaction_currency_id = $currency->id;
         $limit->save();
         Log::debug(sprintf('Created new budget limit with ID #%d and amount %s', $limit->id, $data['amount']));
 
         return $limit;
     }
+
+    /** @noinspection MoreThanThreeArgumentsInspection */
 
     /**
      * @param Budget $budget
@@ -815,7 +955,7 @@ class BudgetRepository implements BudgetRepositoryInterface
         if (null !== $existing) {
             throw new FireflyException(sprintf('An entry already exists for these parameters: available budget object with ID #%d', $existing->id));
         }
-        $availableBudget->transaction_currency_id = $data['transaction_currency_id'];
+        $availableBudget->transaction_currency_id = $data['currency_id'];
         $availableBudget->start_date              = $data['start_date'];
         $availableBudget->end_date                = $data['end_date'];
         $availableBudget->amount                  = $data['amount'];
@@ -839,16 +979,27 @@ class BudgetRepository implements BudgetRepositoryInterface
         $budget = $data['budget'];
 
         $budgetLimit->budget()->associate($budget);
-        $budgetLimit->start_date = $data['start_date']->format('Y-m-d 00:00:00');
-        $budgetLimit->end_date   = $data['end_date']->format('Y-m-d 00:00:00');
+        $budgetLimit->start_date = $data['start']->format('Y-m-d 00:00:00');
+        $budgetLimit->end_date   = $data['end']->format('Y-m-d 00:00:00');
         $budgetLimit->amount     = $data['amount'];
+
+        // if no currency has been provided, use the user's default currency:
+        /** @var TransactionCurrencyFactory $factory */
+        $factory  = app(TransactionCurrencyFactory::class);
+        $currency = $factory->find($data['currency_id'] ?? null, $data['currency_code'] ?? null);
+        if (null === $currency) {
+            $currency = app('amount')->getDefaultCurrencyByUser($this->user);
+        }
+        $currency->enabled = true;
+        $currency->save();
+        $budgetLimit->transaction_currency_id = $currency->id;
+
         $budgetLimit->save();
         Log::debug(sprintf('Updated budget limit with ID #%d and amount %s', $budgetLimit->id, $data['amount']));
 
         return $budgetLimit;
     }
 
-    /** @noinspection MoreThanThreeArgumentsInspection */
     /**
      * @param Budget $budget
      * @param Carbon $start

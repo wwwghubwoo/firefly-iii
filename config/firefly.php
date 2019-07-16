@@ -24,6 +24,8 @@
 declare(strict_types=1);
 
 use FireflyIII\Export\Exporter\CsvExporter;
+use FireflyIII\Services\Currency\FixerIOv2;
+use FireflyIII\Services\Currency\RatesApiIOv1;
 use FireflyIII\TransactionRules\Actions\AddTag;
 use FireflyIII\TransactionRules\Actions\AppendDescription;
 use FireflyIII\TransactionRules\Actions\AppendNotes;
@@ -86,16 +88,33 @@ use FireflyIII\TransactionRules\Triggers\UserAction;
  */
 
 return [
-    'configuration'            => [
+    'configuration'                => [
         'single_user_mode' => true,
         'is_demo_site'     => false,
     ],
-    'encryption'               => null === env('USE_ENCRYPTION') || env('USE_ENCRYPTION') === true,
-    'version'                  => '4.7.7',
-    'api_version'              => '0.8',
-    'db_version'               => 5,
-    'maxUploadSize'            => 15242880,
-    'allowedMimes'             => [
+    'encryption'                   => null === env('USE_ENCRYPTION') || env('USE_ENCRYPTION') === true,
+    'version'                      => '4.7.17.3',
+    'api_version'                  => '0.9.2',
+    'db_version'                   => 10,
+    'maxUploadSize'                => 15242880,
+    'send_error_message'           => env('SEND_ERROR_MESSAGE', true),
+    'site_owner'                   => env('SITE_OWNER', ''),
+    'send_registration_mail'       => env('SEND_REGISTRATION_MAIL', true),
+    'demo_username'                => env('DEMO_USERNAME', ''),
+    'demo_password'                => env('DEMO_PASSWORD', ''),
+    'is_sandstorm'                 => env('IS_SANDSTORM', 'unknown'),
+    'is_docker'                    => env('IS_DOCKER', 'unknown'),
+    'bunq_use_sandbox'             => env('BUNQ_USE_SANDBOX', false),
+    'fixer_api_key'                => env('FIXER_API_KEY', ''),
+    'mapbox_api_key'               => env('MAPBOX_API_KEY', ''),
+    'trusted_proxies'              => env('TRUSTED_PROXIES', ''),
+    'search_result_limit'          => env('SEARCH_RESULT_LIMIT', 50),
+    'send_report_journals'         => envNonEmpty('SEND_REPORT_JOURNALS', true),
+    'analytics_id'                 => env('ANALYTICS_ID', ''),
+    'disable_frame_header'         => env('DISABLE_FRAME_HEADER', false),
+    'login_provider'               => envNonEmpty('LOGIN_PROVIDER', 'eloquent'),
+    'cer_provider'                 => envNonEmpty('CER_PROVIDER', 'fixer'),
+    'allowedMimes'                 => [
         /* plain files */
         'text/plain',
 
@@ -157,18 +176,18 @@ return [
         'application/vnd.oasis.opendocument.database',
         'application/vnd.oasis.opendocument.image',
     ],
-    'list_length'              => 10,
-    'export_formats'           => [
+    'list_length'                  => 10,
+    'export_formats'               => [
         'csv' => CsvExporter::class,
     ],
-    'default_export_format'    => 'csv',
-    'default_import_format'    => 'csv',
-    'bill_periods'             => ['weekly', 'monthly', 'quarterly', 'half-year', 'yearly'],
-    'accountRoles'             => ['defaultAsset', 'sharedAsset', 'savingAsset', 'ccAsset', 'cashWalletAsset'],
-    'ccTypes'                  => [
+    'default_export_format'        => 'csv',
+    'default_import_format'        => 'csv',
+    'bill_periods'                 => ['weekly', 'monthly', 'quarterly', 'half-year', 'yearly'],
+    'accountRoles'                 => ['defaultAsset', 'sharedAsset', 'savingAsset', 'ccAsset', 'cashWalletAsset'],
+    'ccTypes'                      => [
         'monthlyFull' => 'Full payment every month',
     ],
-    'range_to_repeat_freq'     => [
+    'range_to_repeat_freq'         => [
         '1D'     => 'weekly',
         '1W'     => 'weekly',
         '1M'     => 'monthly',
@@ -177,7 +196,7 @@ return [
         '1Y'     => 'yearly',
         'custom' => 'custom',
     ],
-    'subTitlesByIdentifier'    =>
+    'subTitlesByIdentifier'        =>
         [
             'asset'       => 'Asset accounts',
             'expense'     => 'Expense accounts',
@@ -186,7 +205,7 @@ return [
             'liabilities' => 'Liabilities',
             'liability'   => 'Liabilities',
         ],
-    'subIconsByIdentifier'     =>
+    'subIconsByIdentifier'         =>
         [
             'asset'               => 'fa-money',
             'Asset account'       => 'fa-money',
@@ -201,7 +220,7 @@ return [
             'Import account'      => 'fa-download',
             'liabilities'         => 'fa-ticket',
         ],
-    'accountTypesByIdentifier' =>
+    'accountTypesByIdentifier'     =>
         [
             'asset'       => ['Default account', 'Asset account'],
             'expense'     => ['Expense account', 'Beneficiary account'],
@@ -209,7 +228,7 @@ return [
             'import'      => ['Import account'],
             'liabilities' => ['Loan', 'Debt', 'Credit card', 'Mortgage'],
         ],
-    'accountTypeByIdentifier'  =>
+    'accountTypeByIdentifier'      =>
         [
             'asset'       => ['Asset account'],
             'expense'     => ['Expense account'],
@@ -221,35 +240,56 @@ return [
             'liabilities' => ['Loan', 'Debt', 'Mortgage', 'Credit card'],
             'liability'   => ['Loan', 'Debt', 'Mortgage', 'Credit card'],
         ],
-    'shortNamesByFullName'     =>
+    'shortNamesByFullName'         =>
         [
-            'Default account'     => 'asset',
-            'Asset account'       => 'asset',
-            'Import account'      => 'import',
-            'Expense account'     => 'expense',
-            'Beneficiary account' => 'expense',
-            'Revenue account'     => 'revenue',
-            'Cash account'        => 'cash',
-            'Credit card'         => 'liabilities',
-            'Loan'                => 'liabilities',
-            'Debt'                => 'liabilities',
-            'Mortgage'            => 'liabilities',
+            'Default account'         => 'asset',
+            'Asset account'           => 'asset',
+            'Import account'          => 'import',
+            'Expense account'         => 'expense',
+            'Beneficiary account'     => 'expense',
+            'Revenue account'         => 'revenue',
+            'Cash account'            => 'cash',
+            'Initial balance account' => 'initial-balance',
+            'Reconciliation account'  => 'reconciliation',
+            'Credit card'             => 'liabilities',
+            'Loan'                    => 'liabilities',
+            'Debt'                    => 'liabilities',
+            'Mortgage'                => 'liabilities',
         ],
-    'languages'                => [
-        // completed languages
-        'en_US' => ['name_locale' => 'English', 'name_english' => 'English'],
-        'es_ES' => ['name_locale' => 'Español', 'name_english' => 'Spanish'],
-        'de_DE' => ['name_locale' => 'Deutsch', 'name_english' => 'German'],
-        'fr_FR' => ['name_locale' => 'Français', 'name_english' => 'French'],
-        //'id_ID' => ['name_locale' => 'Bahasa Indonesia', 'name_english' => 'Indonesian'],
-        'it_IT' => ['name_locale' => 'Italiano', 'name_english' => 'Italian'],
-        'nl_NL' => ['name_locale' => 'Nederlands', 'name_english' => 'Dutch'],
-        'pl_PL' => ['name_locale' => 'Polski', 'name_english' => 'Polish '],
-        //'pt_BR' => ['name_locale' => 'Português do Brasil', 'name_english' => 'Portuguese (Brazil)'],
-        'ru_RU' => ['name_locale' => 'Русский', 'name_english' => 'Russian'],
-        //'tr_TR' => ['name_locale' => 'Türkçe', 'name_english' => 'Turkish'],
+    'shortLiabilityNameByFullName' => [
+        'Credit card' => 'creditcard',
+        'Loan'        => 'loan',
+        'Debt'        => 'debt',
+        'Mortgage'    => 'mortgage',
     ],
-    'transactionTypesByWhat'   => [
+    'languages'                    => [
+        'en_US' => ['name_locale' => 'English', 'name_english' => 'English'],
+        'es_ES' => ['name_locale' => 'Español', 'name_english' => 'Spanish'], // 92%
+        'de_DE' => ['name_locale' => 'Deutsch', 'name_english' => 'German'],  // 100%
+        'fr_FR' => ['name_locale' => 'Français', 'name_english' => 'French'], // 100%
+        //'id_ID' => ['name_locale' => 'Bahasa Indonesia', 'name_english' => 'Indonesian'], // 65%
+        'it_IT' => ['name_locale' => 'Italiano', 'name_english' => 'Italian'], // 100%
+        'nl_NL' => ['name_locale' => 'Nederlands', 'name_english' => 'Dutch'], // 100%
+        'pl_PL' => ['name_locale' => 'Polski', 'name_english' => 'Polish '], // 87%
+        'pt_BR' => ['name_locale' => 'Português do Brasil', 'name_english' => 'Portuguese (Brazil)'], // 80%
+        'ru_RU' => ['name_locale' => 'Русский', 'name_english' => 'Russian'], // 83%
+        'zh_TW' => ['name_locale' => 'Chinese Traditional', 'name_english' => 'Chinese Traditional'], // 100%
+        'zh_CN' => ['name_locale' => 'Chinese Simplified', 'name_english' => 'Chinese Simplified'], // 99%
+        //'tr_TR' => ['name_locale' => 'Türkçe', 'name_english' => 'Turkish'], // 71%
+        'nb_NO' => ['name_locale' => 'Norsk', 'name_english' => 'Norwegian'],
+        //'ca_ES' => ['name_locale' => 'Catalan', 'name_english' => 'Catalan'], // 0%
+        //'ja_JA' => ['name_locale' => 'Japanese', 'name_english' => 'Japanese'], // 0%
+        //'cs_CZ' => ['name_locale' => 'Czech', 'name_english' => 'Czech'], // 35%
+        //'he_IL' => ['name_locale' => 'Hebrew', 'name_english' => 'Hebrew'], // 2%
+        //'hu_HU' => ['name_locale' => 'Hungarian', 'name_english' => 'Hungarian'], // 40%
+        //'sv_SE' => ['name_locale' => 'Svenska', 'name_english' => 'Swedish'], // 1%
+        //'sr_CS' => ['name_locale' => 'Serbian (Latin)', 'name_english' => 'Serbian (Latin)'], // 0%
+        //'sl_SI' => ['name_locale' => 'Slovenian', 'name_english' => 'Slovenian'], // 10%
+        //'uk_UA' => ['name_locale' => 'Ukranian', 'name_english' => 'Ukranian'], // 4%
+
+
+    ],
+    'transactionTypesByWhat'       => [
         'expenses'   => ['Withdrawal'],
         'withdrawal' => ['Withdrawal'],
         'revenue'    => ['Deposit'],
@@ -257,7 +297,14 @@ return [
         'transfer'   => ['Transfer'],
         'transfers'  => ['Transfer'],
     ],
-    'transactionIconsByWhat'   => [
+    'transactionTypesToShort'      => [
+        'Withdrawal'      => 'withdrawal',
+        'Deposit'         => 'deposit',
+        'Transfer'        => 'transfer',
+        'Opening balance' => 'opening-balance',
+        'Reconciliation'  => 'reconciliation',
+    ],
+    'transactionIconsByWhat'       => [
         'expenses'   => 'fa-long-arrow-left',
         'withdrawal' => 'fa-long-arrow-left',
         'revenue'    => 'fa-long-arrow-right',
@@ -266,7 +313,7 @@ return [
         'transfers'  => 'fa-exchange',
 
     ],
-    'bindables'                => [
+    'bindables'                    => [
         // models
         'account'           => \FireflyIII\Models\Account::class,
         'attachment'        => \FireflyIII\Models\Attachment::class,
@@ -293,6 +340,7 @@ return [
 
         // strings
         'import_provider'   => \FireflyIII\Support\Binder\ImportProvider::class,
+        'currency_code'     => \FireflyIII\Support\Binder\CurrencyCode::class,
 
         // dates
         'start_date'        => \FireflyIII\Support\Binder\Date::class,
@@ -313,10 +361,12 @@ return [
         'toCurrencyCode'    => \FireflyIII\Support\Binder\CurrencyCode::class,
         'unfinishedJournal' => \FireflyIII\Support\Binder\UnfinishedJournal::class,
         'cliToken'          => \FireflyIII\Support\Binder\CLIToken::class,
+        'tagOrId'           => \FireflyIII\Support\Binder\TagOrId::class,
+        'configName'        => \FireflyIII\Support\Binder\ConfigurationName::class,
 
 
     ],
-    'rule-triggers'            => [
+    'rule-triggers'                => [
         'user_action'           => UserAction::class,
         'from_account_starts'   => FromAccountStarts::class,
         'from_account_ends'     => FromAccountEnds::class,
@@ -352,7 +402,7 @@ return [
         'no_notes'              => NotesEmpty::class,
         'any_notes'             => NotesAny::class,
     ],
-    'rule-actions'             => [
+    'rule-actions'                 => [
         'set_category'            => SetCategory::class,
         'clear_category'          => ClearCategory::class,
         'set_budget'              => SetBudget::class,
@@ -374,23 +424,63 @@ return [
         'convert_deposit'         => ConvertToDeposit::class,
         'convert_transfer'        => ConvertToTransfer::class,
     ],
-    'rule-actions-text'        => [
+    'context-rule-actions'         => [
         'set_category',
         'set_budget',
         'add_tag',
         'remove_tag',
-        'link_to_bill',
         'set_description',
         'append_description',
         'prepend_description',
+        'set_source_account',
+        'set_destination_account',
+        'set_notes',
+        'append_notes',
+        'prepend_notes',
+        'link_to_bill',
+        'convert_withdrawal',
+        'convert_deposit',
+        'convert_transfer',
     ],
-    'test-triggers'            => [
+    'context-rule-triggers'        => [
+        'from_account_starts',
+        'from_account_ends',
+        'from_account_is',
+        'from_account_contains',
+        'to_account_starts',
+        'to_account_ends',
+        'to_account_is',
+        'to_account_contains',
+        'amount_less',
+        'amount_exactly',
+        'amount_more',
+        'description_starts',
+        'description_ends',
+        'description_contains',
+        'description_is',
+        'transaction_type',
+        'category_is',
+        'budget_is',
+        'tag_is',
+        'currency_is',
+        'notes_contain',
+        'notes_start',
+        'notes_end',
+        'notes_are',
+    ],
+
+
+    'test-triggers'    => [
         'limit' => 10,
         'range' => 200,
     ],
-    'default_currency'         => 'EUR',
-    'default_language'         => 'en_US',
-    'search_modifiers'         => ['amount_is', 'amount', 'amount_max', 'amount_min', 'amount_less', 'amount_more', 'source', 'destination', 'category',
-                                   'budget', 'bill', 'type', 'date', 'date_before', 'date_after', 'on', 'before', 'after'],
+    'default_currency' => 'EUR',
+    'default_language' => 'en_US',
+    'search_modifiers' => ['amount_is', 'amount', 'amount_max', 'amount_min', 'amount_less', 'amount_more', 'source', 'destination', 'category',
+                           'budget', 'bill', 'type', 'date', 'date_before', 'date_after', 'on', 'before', 'after'],
     // tag notes has_attachments
+    'cer_providers'    => [
+        'fixer'    => FixerIOv2::class,
+        'ratesapi' => RatesApiIOv1::class,
+    ],
 ];

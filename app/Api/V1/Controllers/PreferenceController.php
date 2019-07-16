@@ -24,7 +24,9 @@ declare(strict_types=1);
 namespace FireflyIII\Api\V1\Controllers;
 
 use FireflyIII\Api\V1\Requests\PreferenceRequest;
+use FireflyIII\Models\AccountType;
 use FireflyIII\Models\Preference;
+use FireflyIII\Repositories\Account\AccountRepositoryInterface;
 use FireflyIII\Transformers\PreferenceTransformer;
 use FireflyIII\User;
 use Illuminate\Http\JsonResponse;
@@ -42,6 +44,34 @@ use League\Fractal\Serializer\JsonApiSerializer;
 class PreferenceController extends Controller
 {
     /**
+     * LinkTypeController constructor.
+     */
+    public function __construct()
+    {
+        parent::__construct();
+        $this->middleware(
+            function ($request, $next) {
+                /** @var User $user */
+                $user       = auth()->user();
+                $repository = app(AccountRepositoryInterface::class);
+                $repository->setUser($user);
+
+                // an important fallback is that the frontPageAccount array gets refilled automatically
+                // when it turns up empty.
+                $frontPageAccounts = app('preferences')->getForUser($user, 'frontPageAccounts', [])->data;
+                if (0 === \count($frontPageAccounts)) {
+                    /** @var Collection $accounts */
+                    $accounts   = $repository->getAccountsByType([AccountType::DEFAULT, AccountType::ASSET]);
+                    $accountIds = $accounts->pluck('id')->toArray();
+                    app('preferences')->setForUser($user, 'frontPageAccounts', $accountIds);
+                }
+
+                return $next($request);
+            }
+        );
+    }
+
+    /**
      * List all of them.
      *
      * @param Request $request
@@ -51,12 +81,13 @@ class PreferenceController extends Controller
     public function index(Request $request): JsonResponse
     {
         /** @var User $user */
-        $user        = auth()->user();
-        $available   = [
+        $user      = auth()->user();
+        $available = [
             'language', 'customFiscalYear', 'fiscalYearStart', 'currencyPreference',
             'transaction_journal_optional_fields', 'frontPageAccounts', 'viewRange',
             'listPageSize, twoFactorAuthEnabled',
         ];
+
         $preferences = new Collection;
         foreach ($available as $name) {
             $pref = app('preferences')->getForUser($user, $name);
@@ -71,7 +102,12 @@ class PreferenceController extends Controller
 
         // present to user.
         $manager->setSerializer(new JsonApiSerializer($baseUrl));
-        $resource = new FractalCollection($preferences, new PreferenceTransformer($this->parameters), 'preferences');
+
+        /** @var PreferenceTransformer $transformer */
+        $transformer = app(PreferenceTransformer::class);
+        $transformer->setParameters($this->parameters);
+
+        $resource = new FractalCollection($preferences, $transformer, 'preferences');
 
         return response()->json($manager->createData($resource)->toArray())->header('Content-Type', 'application/vnd.api+json');
 
@@ -79,12 +115,13 @@ class PreferenceController extends Controller
     }
 
     /**
-     * List single resource.
+     * Return a single preference by name.
      *
      * @param Request    $request
      * @param Preference $preference
      *
      * @return JsonResponse
+     * @SuppressWarnings(PHPMD.CyclomaticComplexity)
      */
     public function show(Request $request, Preference $preference): JsonResponse
     {
@@ -94,10 +131,13 @@ class PreferenceController extends Controller
 
         // present to user.
         $manager->setSerializer(new JsonApiSerializer($baseUrl));
-        $resource = new Item($preference, new PreferenceTransformer($this->parameters), 'preferences');
+        /** @var PreferenceTransformer $transformer */
+        $transformer = app(PreferenceTransformer::class);
+        $transformer->setParameters($this->parameters);
+
+        $resource = new Item($preference, $transformer, 'preferences');
 
         return response()->json($manager->createData($resource)->toArray())->header('Content-Type', 'application/vnd.api+json');
-
     }
 
     /**
@@ -137,7 +177,11 @@ class PreferenceController extends Controller
 
         // present to user.
         $manager->setSerializer(new JsonApiSerializer($baseUrl));
-        $resource = new Item($result, new PreferenceTransformer($this->parameters), 'preferences');
+        /** @var PreferenceTransformer $transformer */
+        $transformer = app(PreferenceTransformer::class);
+        $transformer->setParameters($this->parameters);
+
+        $resource = new Item($result, $transformer, 'preferences');
 
         return response()->json($manager->createData($resource)->toArray())->header('Content-Type', 'application/vnd.api+json');
 

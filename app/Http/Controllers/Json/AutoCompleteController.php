@@ -22,72 +22,24 @@ declare(strict_types=1);
 
 namespace FireflyIII\Http\Controllers\Json;
 
+use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Helpers\Collector\TransactionCollectorInterface;
 use FireflyIII\Http\Controllers\Controller;
-use FireflyIII\Models\Account;
 use FireflyIII\Models\AccountType;
 use FireflyIII\Models\TransactionJournal;
-use FireflyIII\Repositories\Account\AccountRepositoryInterface;
-use FireflyIII\Repositories\Bill\BillRepositoryInterface;
-use FireflyIII\Repositories\Budget\BudgetRepositoryInterface;
-use FireflyIII\Repositories\Category\CategoryRepositoryInterface;
-use FireflyIII\Repositories\Currency\CurrencyRepositoryInterface;
-use FireflyIII\Repositories\Journal\JournalRepositoryInterface;
-use FireflyIII\Repositories\Tag\TagRepositoryInterface;
 use FireflyIII\Support\CacheProperties;
+use FireflyIII\Support\Http\Controllers\AutoCompleteCollector;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
- * TODO refactor so each auto-complete thing is a function call because lots of code duplication.
  * Class AutoCompleteController.
  *
- * @SuppressWarnings(PHPMD.TooManyPublicMethods)
  * @SuppressWarnings(PHPMD.CouplingBetweenObjects)
  */
 class AutoCompleteController extends Controller
 {
-
-    /**
-     * Returns a JSON list of all accounts.
-     *
-     * @param Request                    $request
-     * @param AccountRepositoryInterface $repository
-     *
-     * @return JsonResponse
-     */
-    public function allAccounts(Request $request, AccountRepositoryInterface $repository): JsonResponse
-    {
-        $search = (string)$request->get('search');
-        $cache  = new CacheProperties;
-        $cache->addProperty('ac-all-accounts');
-        // very unlikely a user will actually search for this string.
-        $key = '' === $search ? 'skjf0893j89fj2398hd89dh289h2398hr7isd8900828u209ujnxs88929282u' : $search;
-        $cache->addProperty($key);
-        if ($cache->has()) {
-            return response()->json($cache->get());
-        }
-        // find everything:
-        $return = array_values(
-            array_unique(
-                $repository->getAccountsByType(
-                    [AccountType::REVENUE, AccountType::EXPENSE, AccountType::BENEFICIARY, AccountType::DEFAULT, AccountType::ASSET]
-                )->pluck('name')->toArray()
-            )
-        );
-        if ('' !== $search) {
-            $return = array_values(
-                array_filter(
-                    $return, function (string $value) use ($search) {
-                    return !(false === stripos($value, $search));
-                }, ARRAY_FILTER_USE_BOTH
-                )
-            );
-        }
-        $cache->store($return);
-
-        return response()->json($return);
-    }
+    use AutoCompleteCollector;
 
     /**
      * List of all journals.
@@ -106,7 +58,7 @@ class AutoCompleteController extends Controller
         $key = '' === $search ? 'skjf0893j89fj2398hd89dh289h2398hr7isd8900828u209ujnxs88929282u' : $search;
         $cache->addProperty($key);
         if ($cache->has()) {
-            return response()->json($cache->get());
+            return response()->json($cache->get()); // @codeCoverageIgnore
         }
         // find everything:
         $collector->setLimit(250)->setPage(1);
@@ -129,251 +81,63 @@ class AutoCompleteController extends Controller
     }
 
     /**
-     * List of revenue accounts.
+     * @param Request $request
+     * @param string  $subject
      *
-     * @param Request                    $request
-     * @param AccountRepositoryInterface $repository
-     *
+     * @throws FireflyException
      * @return JsonResponse
      */
-    public function assetAccounts(Request $request, AccountRepositoryInterface $repository): JsonResponse
+    public function autoComplete(Request $request, string $subject): JsonResponse
     {
-        $search = (string)$request->get('search');
-        $cache  = new CacheProperties;
-        $cache->addProperty('ac-asset-accounts');
-        // very unlikely a user will actually search for this string.
-        $key = '' === $search ? 'skjf0893j89fj2398hd89dh289h2398hr7isd8900828u209ujnxs88929282u' : $search;
-        $cache->addProperty($key);
-        if ($cache->has()) {
-            return response()->json($cache->get());
+        $search     = (string)$request->get('search');
+        $unfiltered = null;
+        $filtered   = null;
+
+        switch ($subject) {
+            default:
+                break;
+            case 'all-accounts':
+                $unfiltered = $this->getAccounts(
+                    [AccountType::REVENUE, AccountType::EXPENSE, AccountType::BENEFICIARY, AccountType::DEFAULT, AccountType::ASSET, AccountType::LOAN,
+                     AccountType::DEBT, AccountType::MORTGAGE]
+                );
+                break;
+            case 'expense-accounts':
+                $unfiltered = $this->getAccounts([AccountType::EXPENSE, AccountType::BENEFICIARY]);
+                break;
+            case 'revenue-accounts':
+                $unfiltered = $this->getAccounts([AccountType::REVENUE]);
+                break;
+            case 'asset-accounts':
+                $unfiltered = $this->getAccounts([AccountType::ASSET, AccountType::DEFAULT]);
+                break;
+            case 'categories':
+                $unfiltered = $this->getCategories();
+                break;
+            case 'budgets':
+                $unfiltered = $this->getBudgets();
+                break;
+            case 'tags':
+                $unfiltered = $this->getTags();
+                break;
+            case 'bills':
+                $unfiltered = $this->getBills();
+                break;
+            case 'currency-names':
+                $unfiltered = $this->getCurrencyNames();
+                break;
+            case 'transaction-types':
+            case 'transaction_types':
+                $unfiltered = $this->getTransactionTypes();
+                break;
         }
-        // find everything:
-        $set      = $repository->getAccountsByType([AccountType::DEFAULT, AccountType::ASSET]);
-        $filtered = $set->filter(
-            function (Account $account) {
-                if (true === $account->active) {
-                    return $account;
-                }
+        $filtered = $this->filterResult($unfiltered, $search);
 
-                return false; // @codeCoverageIgnore
-            }
-        );
-        $return   = array_values(array_unique($filtered->pluck('name')->toArray()));
-
-        if ('' !== $search) {
-            $return = array_values(
-                array_unique(
-                    array_filter(
-                        $return, function (string $value) use ($search) {
-                        return !(false === stripos($value, $search));
-                    }, ARRAY_FILTER_USE_BOTH
-                    )
-                )
-            );
+        if (null === $filtered) {
+            throw new FireflyException(sprintf('Auto complete handler cannot handle "%s"', $subject)); // @codeCoverageIgnore
         }
-        $cache->store($return);
 
-        return response()->json($return);
-    }
-
-    /**
-     * Returns a JSON list of all bills.
-     *
-     * @param Request                 $request
-     * @param BillRepositoryInterface $repository
-     *
-     * @return JsonResponse
-     */
-    public function bills(Request $request, BillRepositoryInterface $repository): JsonResponse
-    {
-        $search = (string)$request->get('search');
-        $cache  = new CacheProperties;
-        $cache->addProperty('ac-bills');
-        // very unlikely a user will actually search for this string.
-        $key = '' === $search ? 'skjf0893j89fj2398hd89dh289h2398hr7isd8900828u209ujnxs88929282u' : $search;
-        $cache->addProperty($key);
-        if ($cache->has()) {
-            return response()->json($cache->get());
-        }
-        // find everything:
-        $return = array_unique($repository->getActiveBills()->pluck('name')->toArray());
-
-        if ('' !== $search) {
-            $return = array_values(
-                array_unique(
-                    array_filter(
-                        $return, function (string $value) use ($search) {
-                        return !(false === stripos($value, $search));
-                    }, ARRAY_FILTER_USE_BOTH
-                    )
-                )
-            );
-        }
-        $cache->store($return);
-
-        return response()->json($return);
-    }
-
-    /**
-     * List of budgets.
-     *
-     * @param Request                   $request
-     * @param BudgetRepositoryInterface $repository
-     *
-     * @return JsonResponse
-     */
-    public function budgets(Request $request, BudgetRepositoryInterface $repository): JsonResponse
-    {
-        $search = (string)$request->get('search');
-        $cache  = new CacheProperties;
-        $cache->addProperty('ac-budgets');
-        // very unlikely a user will actually search for this string.
-        $key = '' === $search ? 'skjf0893j89fj2398hd89dh289h2398hr7isd8900828u209ujnxs88929282u' : $search;
-        $cache->addProperty($key);
-        if ($cache->has()) {
-            return response()->json($cache->get());
-        }
-        // find everything:
-        $return = array_unique($repository->getBudgets()->pluck('name')->toArray());
-
-        if ('' !== $search) {
-            $return = array_values(
-                array_unique(
-                    array_filter(
-                        $return, function (string $value) use ($search) {
-                        return !(false === stripos($value, $search));
-                    }, ARRAY_FILTER_USE_BOTH
-                    )
-                )
-            );
-        }
-        $cache->store($return);
-
-        return response()->json($return);
-    }
-
-    /**
-     * Returns a list of categories.
-     *
-     * @param Request                     $request
-     * @param CategoryRepositoryInterface $repository
-     *
-     * @return JsonResponse
-     */
-    public function categories(Request $request, CategoryRepositoryInterface $repository): JsonResponse
-    {
-        $search = (string)$request->get('search');
-        $cache  = new CacheProperties;
-        $cache->addProperty('ac-categories');
-        // very unlikely a user will actually search for this string.
-        $key = '' === $search ? 'skjf0893j89fj2398hd89dh289h2398hr7isd8900828u209ujnxs88929282u' : $search;
-        $cache->addProperty($key);
-        if ($cache->has()) {
-            return response()->json($cache->get());
-        }
-        // find everything:
-        $return = array_unique($repository->getCategories()->pluck('name')->toArray());
-        if ('' !== $search) {
-            $return = array_values(
-                array_filter(
-                    $return, function (string $value) use ($search) {
-                    return !(false === stripos($value, $search));
-                }, ARRAY_FILTER_USE_BOTH
-                )
-            );
-        }
-        $cache->store($return);
-
-        return response()->json($return);
-    }
-
-    /**
-     * List of currency names.
-     *
-     * @param Request                     $request
-     * @param CurrencyRepositoryInterface $repository
-     *
-     * @return JsonResponse
-     */
-    public function currencyNames(Request $request, CurrencyRepositoryInterface $repository): JsonResponse
-    {
-        $search = (string)$request->get('search');
-        $cache  = new CacheProperties;
-        $cache->addProperty('ac-currency-names');
-        // very unlikely a user will actually search for this string.
-        $key = '' === $search ? 'skjf0893j89fj2398hd89dh289h2398hr7isd8900828u209ujnxs88929282u' : $search;
-        $cache->addProperty($key);
-        if ($cache->has()) {
-            return response()->json($cache->get());
-        }
-        // find everything:
-        $return = $repository->get()->pluck('name')->toArray();
-        sort($return);
-
-        if ('' !== $search) {
-            $return = array_values(
-                array_unique(
-                    array_filter(
-                        $return, function (string $value) use ($search) {
-                        return !(false === stripos($value, $search));
-                    }, ARRAY_FILTER_USE_BOTH
-                    )
-                )
-            );
-        }
-        $cache->store($return);
-
-        return response()->json($return);
-    }
-
-    /**
-     * Returns a JSON list of all beneficiaries.
-     *
-     * @param Request                    $request
-     * @param AccountRepositoryInterface $repository
-     *
-     * @return JsonResponse
-     */
-    public function expenseAccounts(Request $request, AccountRepositoryInterface $repository): JsonResponse
-    {
-        $search = (string)$request->get('search');
-        $cache  = new CacheProperties;
-        $cache->addProperty('ac-expense-accounts');
-        // very unlikely a user will actually search for this string.
-        $key = '' === $search ? 'skjf0893j89fj2398hd89dh289h2398hr7isd8900828u209ujnxs88929282u' : $search;
-        $cache->addProperty($key);
-        if ($cache->has()) {
-            return response()->json($cache->get());
-        }
-        // find everything:
-        $set      = $repository->getAccountsByType([AccountType::EXPENSE, AccountType::BENEFICIARY]);
-        $filtered = $set->filter(
-            function (Account $account) {
-                if (true === $account->active) {
-                    return $account;
-                }
-
-                return false;
-            }
-        );
-        $return   = array_unique($filtered->pluck('name')->toArray());
-
-        sort($return);
-
-        if ('' !== $search) {
-            $return = array_values(
-                array_unique(
-                    array_filter(
-                        $return, function (string $value) use ($search) {
-                        return !(false === stripos($value, $search));
-                    }, ARRAY_FILTER_USE_BOTH
-                    )
-                )
-            );
-        }
-        $cache->store($return);
-
-        return response()->json($return);
+        return response()->json($filtered);
     }
 
     /**
@@ -394,7 +158,7 @@ class AutoCompleteController extends Controller
         $key = '' === $search ? 'skjf0893j89fj2398hd89dh289h2398hr7isd8900828u209ujnxs88929282u' : $search;
         $cache->addProperty($key);
         if ($cache->has()) {
-            return response()->json($cache->get());
+            return response()->json($cache->get()); // @codeCoverageIgnore
         }
         // find everything:
         $collector->setLimit(400)->setPage(1);
@@ -413,105 +177,15 @@ class AutoCompleteController extends Controller
         sort($return);
 
         if ('' !== $search) {
-            $return = array_values(
-                array_unique(
-                    array_filter(
-                        $return, function (array $array) use ($search) {
-                        $value = $array['name'];
+            $return = array_filter(
+                $return, function (array $array) use ($search) {
+                $haystack = $array['name'];
+                $result   = stripos($haystack, $search);
 
-                        return !(false === stripos($value, $search));
-                    }, ARRAY_FILTER_USE_BOTH
-                    )
-                )
-            );
-        }
-        $cache->store($return);
-
-        return response()->json($return);
-    }
-
-    /**
-     * List of revenue accounts.
-     *
-     * @param Request                    $request
-     * @param AccountRepositoryInterface $repository
-     *
-     * @return JsonResponse
-     */
-    public function revenueAccounts(Request $request, AccountRepositoryInterface $repository): JsonResponse
-    {
-        $search = (string)$request->get('search');
-        $cache  = new CacheProperties;
-        $cache->addProperty('ac-revenue-accounts');
-        // very unlikely a user will actually search for this string.
-        $key = '' === $search ? 'skjf0893j89fj2398hd89dh289h2398hr7isd8900828u209ujnxs88929282u' : $search;
-        $cache->addProperty($key);
-        if ($cache->has()) {
-            return response()->json($cache->get());
-        }
-        // find everything:
-        $set      = $repository->getAccountsByType([AccountType::REVENUE]);
-        $filtered = $set->filter(
-            function (Account $account) {
-                if (true === $account->active) {
-                    return $account;
-                }
-
-                return false;
+                return !(false === $result);
             }
-        );
-        $return   = array_unique($filtered->pluck('name')->toArray());
-        sort($return);
-
-        if ('' !== $search) {
-            $return = array_values(
-                array_unique(
-                    array_filter(
-                        $return, function (string $value) use ($search) {
-                        return !(false === stripos($value, $search));
-                    }, ARRAY_FILTER_USE_BOTH
-                    )
-                )
             );
-        }
-        $cache->store($return);
 
-        return response()->json($return);
-    }
-
-    /**
-     * Returns a JSON list of all beneficiaries.
-     *
-     * @param Request                $request
-     * @param TagRepositoryInterface $tagRepository
-     *
-     * @return JsonResponse
-     */
-    public function tags(Request $request, TagRepositoryInterface $tagRepository): JsonResponse
-    {
-        $search = (string)$request->get('search');
-        $cache  = new CacheProperties;
-        $cache->addProperty('ac-revenue-accounts');
-        // very unlikely a user will actually search for this string.
-        $key = '' === $search ? 'skjf0893j89fj2398hd89dh289h2398hr7isd8900828u209ujnxs88929282u' : $search;
-        $cache->addProperty($key);
-        if ($cache->has()) {
-            return response()->json($cache->get());
-        }
-        // find everything:
-        $return = array_unique($tagRepository->get()->pluck('tag')->toArray());
-        sort($return);
-
-        if ('' !== $search) {
-            $return = array_values(
-                array_unique(
-                    array_filter(
-                        $return, function (string $value) use ($search) {
-                        return !(false === stripos($value, $search));
-                    }, ARRAY_FILTER_USE_BOTH
-                    )
-                )
-            );
         }
         $cache->store($return);
 
@@ -531,12 +205,12 @@ class AutoCompleteController extends Controller
     {
         $search = (string)$request->get('search');
         $cache  = new CacheProperties;
-        $cache->addProperty('ac-revenue-accounts');
+        $cache->addProperty('ac-journals');
         // very unlikely a user will actually search for this string.
         $key = '' === $search ? 'skjf0893j89fj2398hd89dh289h2398hr7isd8900828u209ujnxs88929282u' : $search;
         $cache->addProperty($key);
         if ($cache->has()) {
-            return response()->json($cache->get());
+            return response()->json($cache->get()); // @codeCoverageIgnore
         }
         // find everything:
         $type  = config('firefly.transactionTypesByWhat.' . $what);
@@ -560,46 +234,5 @@ class AutoCompleteController extends Controller
         $cache->store($return);
 
         return response()->json($return);
-    }
-
-    /**
-     * List if transaction types.
-     *
-     * @param Request                    $request
-     * @param JournalRepositoryInterface $repository
-     *
-     * @return JsonResponse
-     */
-    public function transactionTypes(Request $request, JournalRepositoryInterface $repository): JsonResponse
-    {
-        $search = (string)$request->get('search');
-        $cache  = new CacheProperties;
-        $cache->addProperty('ac-revenue-accounts');
-        // very unlikely a user will actually search for this string.
-        $key = '' === $search ? 'skjf0893j89fj2398hd89dh289h2398hr7isd8900828u209ujnxs88929282u' : $search;
-        $cache->addProperty($key);
-        if ($cache->has()) {
-            return response()->json($cache->get());
-        }
-        // find everything:
-        $return = array_unique($repository->getTransactionTypes()->pluck('type')->toArray());
-        sort($return);
-
-        if ('' !== $search) {
-            $return = array_values(
-                array_unique(
-                    array_filter(
-                        $return, function (string $value) use ($search) {
-                        return !(false === stripos($value, $search));
-                    }, ARRAY_FILTER_USE_BOTH
-                    )
-                )
-            );
-        }
-        $cache->store($return);
-
-        return response()->json($return);
-
-
     }
 }

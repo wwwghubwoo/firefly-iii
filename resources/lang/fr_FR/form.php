@@ -30,6 +30,7 @@ return [
     'credit_card_limit'           => 'Limite de carte de crédit',
     'automatch'                   => 'Correspondre automatiquement',
     'skip'                        => 'Ignorer',
+    'enabled'                     => 'Activé',
     'name'                        => 'Nom',
     'active'                      => 'Actif',
     'amount_min'                  => 'Montant minimum',
@@ -44,6 +45,7 @@ return [
     'attachments'                 => 'Documents joints',
     'journal_amount'              => 'Montant',
     'journal_source_name'         => 'Compte de recettes (source)',
+    'keep_bill_id'                => 'Facture',
     'journal_source_id'           => 'Compte d’actif (source)',
     'BIC'                         => 'Code BIC',
     'verify_password'             => 'Vérifiez la sécurité du mot de passe',
@@ -191,6 +193,7 @@ return [
     'password_confirmation' => 'Entrer à nouveau le mot de passe',
     'blocked'               => 'Est bloqué ?',
     'blocked_code'          => 'Raison du blocage',
+    'login_name'            => 'Identifiant',
 
     // import
     'apply_rules'           => 'Appliquer les règles',
@@ -222,6 +225,16 @@ return [
     'public_key'            => 'Clé publique',
     'country_code'          => 'Code pays',
     'provider_code'         => 'Banque ou fournisseur de données',
+    'fints_url'             => 'URL de l\'API FinTS',
+    'fints_port'            => 'Port',
+    'fints_bank_code'       => 'Code banque',
+    'fints_username'        => 'Nom d\'utilisateur',
+    'fints_password'        => 'Code PIN / Mot de passe',
+    'fints_account'         => 'Compte FinTS',
+    'local_account'         => 'Compte Firefly III',
+    'from_date'             => 'À partir du',
+    'to_date'               => 'Jusqu\'au',
+
 
     'due_date'                => 'Échéance',
     'payment_date'            => 'Date de paiement',

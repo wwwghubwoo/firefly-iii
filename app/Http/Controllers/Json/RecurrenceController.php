@@ -83,7 +83,7 @@ class RecurrenceController extends Controller
 
         // if $firstDate is beyond $end, simply return an empty array.
         if ($firstDate->gt($end)) {
-            return response()->json([]);
+            return response()->json();
         }
         // if $firstDate is beyond start, use that one:
         $actualStart = clone $firstDate;
@@ -147,8 +147,9 @@ class RecurrenceController extends Controller
      */
     public function suggest(Request $request): JsonResponse
     {
+        $string = $request->get('date') ?? date('Y-m-d');
         $today       = new Carbon;
-        $date        = Carbon::createFromFormat('Y-m-d', $request->get('date'));
+        $date        = Carbon::createFromFormat('Y-m-d', $string);
         $preSelected = (string)$request->get('pre_select');
         $result      = [];
         if ($date > $today || 'true' === (string)$request->get('past')) {

@@ -28,6 +28,7 @@ use Carbon\Carbon;
 use DB;
 use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Helpers\Filter\CountAttachmentsFilter;
+use FireflyIII\Helpers\Filter\DoubleTransactionFilter;
 use FireflyIII\Helpers\Filter\FilterInterface;
 use FireflyIII\Helpers\Filter\InternalTransferFilter;
 use FireflyIII\Helpers\Filter\NegativeAmountFilter;
@@ -41,6 +42,7 @@ use FireflyIII\Models\Budget;
 use FireflyIII\Models\Category;
 use FireflyIII\Models\Tag;
 use FireflyIII\Models\Transaction;
+use FireflyIII\Models\TransactionCurrency;
 use FireflyIII\Repositories\Account\AccountRepositoryInterface;
 use FireflyIII\Support\CacheProperties;
 use FireflyIII\User;
@@ -53,26 +55,14 @@ use Log;
 /**
  * Class TransactionCollector
  *
- * @codeCoverageIgnore 
+ * @codeCoverageIgnore
  */
 class TransactionCollector implements TransactionCollectorInterface
 {
-    /**
-     * Constructor.
-     */
-    public function __construct()
-    {
-        if ('testing' === env('APP_ENV')) {
-            Log::warning(sprintf('%s should not be instantiated in the TEST environment!', \get_class($this)));
-        }
-    }
-
-
     /** @var array */
     private $accountIds = [];
     /** @var int */
     private $count = 0;
-
     /** @var array */
     private $fields
         = [
@@ -138,6 +128,16 @@ class TransactionCollector implements TransactionCollectorInterface
     private $run = false;
     /** @var User */
     private $user;
+
+    /**
+     * Constructor.
+     */
+    public function __construct()
+    {
+        if ('testing' === config('app.env')) {
+            Log::warning(sprintf('%s should not be instantiated in the TEST environment!', \get_class($this)));
+        }
+    }
 
     /**
      * @param string $filter
@@ -254,6 +254,30 @@ class TransactionCollector implements TransactionCollectorInterface
     }
 
     /**
+     * @return LengthAwarePaginator
+     * @throws FireflyException
+     */
+    public function getPaginatedTransactions(): LengthAwarePaginator
+    {
+        if (true === $this->run) {
+            throw new FireflyException('Cannot getPaginatedTransactions after run in TransactionCollector.');
+        }
+        $this->count();
+        $set      = $this->getTransactions();
+        $journals = new LengthAwarePaginator($set, $this->count, $this->limit, $this->page);
+
+        return $journals;
+    }
+
+    /**
+     * @return EloquentBuilder
+     */
+    public function getQuery(): EloquentBuilder
+    {
+        return $this->query;
+    }
+
+    /**
      * @return Collection
      */
     public function getTransactions(): Collection
@@ -280,26 +304,10 @@ class TransactionCollector implements TransactionCollectorInterface
         // run all filters:
         $set = $this->filter($set);
 
-        // loop for decryption.
+        // loop for date.
         $set->each(
             function (Transaction $transaction) {
-                $transaction->date        = new Carbon($transaction->date);
-                $transaction->description = app('steam')->decrypt((int)$transaction->encrypted, $transaction->description);
-
-                if (null !== $transaction->bill_name) {
-                    $transaction->bill_name = app('steam')->decrypt((int)$transaction->bill_name_encrypted, $transaction->bill_name);
-                }
-                $transaction->account_name          = app('steam')->tryDecrypt($transaction->account_name);
-                $transaction->opposing_account_name = app('steam')->tryDecrypt($transaction->opposing_account_name);
-                $transaction->account_iban          = app('steam')->tryDecrypt($transaction->account_iban);
-                $transaction->opposing_account_iban = app('steam')->tryDecrypt($transaction->opposing_account_iban);
-
-                // budget name
-                $transaction->transaction_journal_budget_name = app('steam')->tryDecrypt($transaction->transaction_journal_budget_name);
-                $transaction->transaction_budget_name         = app('steam')->tryDecrypt($transaction->transaction_budget_name);
-                // category name:
-                $transaction->transaction_journal_category_name = app('steam')->tryDecrypt($transaction->transaction_journal_category_name);
-                $transaction->transaction_category_name         = app('steam')->tryDecrypt($transaction->transaction_category_name);
+                $transaction->date = new Carbon($transaction->date);
             }
 
         );
@@ -307,30 +315,6 @@ class TransactionCollector implements TransactionCollectorInterface
         $cache->store($set);
 
         return $set;
-    }
-
-    /**
-     * @return LengthAwarePaginator
-     * @throws FireflyException
-     */
-    public function getPaginatedTransactions(): LengthAwarePaginator
-    {
-        if (true === $this->run) {
-            throw new FireflyException('Cannot getPaginatedTransactions after run in TransactionCollector.');
-        }
-        $this->count();
-        $set      = $this->getTransactions();
-        $journals = new LengthAwarePaginator($set, $this->count, $this->limit, $this->page);
-
-        return $journals;
-    }
-
-    /**
-     * @return EloquentBuilder
-     */
-    public function getQuery(): EloquentBuilder
-    {
-        return $this->query;
     }
 
     /**
@@ -529,6 +513,41 @@ class TransactionCollector implements TransactionCollectorInterface
     }
 
     /**
+     * Set the required currency (local or foreign)
+     *
+     * @param TransactionCurrency $currency
+     *
+     * @return TransactionCollectorInterface
+     */
+    public function setCurrency(TransactionCurrency $currency): TransactionCollectorInterface
+    {
+        $this->query->where(
+            function (EloquentBuilder $builder) use ($currency) {
+                $builder->where('transactions.transaction_currency_id', $currency->id);
+                $builder->orWhere('transactions.foreign_currency_id', $currency->id);
+            }
+        );
+
+        return $this;
+    }
+
+    /**
+     * @param array $journalIds
+     *
+     * @return TransactionCollectorInterface
+     */
+    public function setJournalIds(array $journalIds): TransactionCollectorInterface
+    {
+        $this->query->where(
+            function (EloquentBuilder $q) use ($journalIds) {
+                $q->whereIn('transaction_journals.id', $journalIds);
+            }
+        );
+
+        return $this;
+    }
+
+    /**
      * @param Collection $journals
      *
      * @return TransactionCollectorInterface
@@ -628,6 +647,40 @@ class TransactionCollector implements TransactionCollectorInterface
             $this->query->where('transaction_journals.date', '<=', $endStr);
             Log::debug(sprintf('TransactionCollector range is now %s - %s (inclusive)', $startStr, $endStr));
         }
+
+        return $this;
+    }
+
+    /**
+     * Search for words in descriptions.
+     *
+     * @param array $array
+     *
+     * @return TransactionCollectorInterface
+     */
+    public function setSearchWords(array $array): TransactionCollectorInterface
+    {
+        // 'transaction_journals.description',
+        $this->query->where(
+            function (EloquentBuilder $q) use ($array) {
+                $q->where(
+                    function (EloquentBuilder $q1) use ($array) {
+                        foreach ($array as $word) {
+                            $keyword = sprintf('%%%s%%', $word);
+                            $q1->where('transaction_journals.description', 'LIKE', $keyword);
+                        }
+                    }
+                );
+                $q->orWhere(
+                    function (EloquentBuilder $q2) use ($array) {
+                        foreach ($array as $word) {
+                            $keyword = sprintf('%%%s%%', $word);
+                            $q2->where('transactions.description', 'LIKE', $keyword);
+                        }
+                    }
+                );
+            }
+        );
 
         return $this;
     }
@@ -784,14 +837,15 @@ class TransactionCollector implements TransactionCollectorInterface
     {
         // create all possible filters:
         $filters = [
-            InternalTransferFilter::class => new InternalTransferFilter($this->accountIds),
-            OpposingAccountFilter::class  => new OpposingAccountFilter($this->accountIds),
-            TransferFilter::class         => new TransferFilter,
-            PositiveAmountFilter::class   => new PositiveAmountFilter,
-            NegativeAmountFilter::class   => new NegativeAmountFilter,
-            SplitIndicatorFilter::class   => new SplitIndicatorFilter,
-            CountAttachmentsFilter::class => new CountAttachmentsFilter,
-            TransactionViewFilter::class  => new TransactionViewFilter,
+            InternalTransferFilter::class  => new InternalTransferFilter($this->accountIds),
+            OpposingAccountFilter::class   => new OpposingAccountFilter($this->accountIds),
+            TransferFilter::class          => new TransferFilter,
+            PositiveAmountFilter::class    => new PositiveAmountFilter,
+            NegativeAmountFilter::class    => new NegativeAmountFilter,
+            SplitIndicatorFilter::class    => new SplitIndicatorFilter,
+            CountAttachmentsFilter::class  => new CountAttachmentsFilter,
+            TransactionViewFilter::class   => new TransactionViewFilter,
+            DoubleTransactionFilter::class => new DoubleTransactionFilter,
         ];
         Log::debug(sprintf('Will run %d filters on the set.', \count($this->filters)));
         foreach ($this->filters as $enabled) {

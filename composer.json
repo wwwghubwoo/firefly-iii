@@ -37,6 +37,7 @@
   "license": "GPL-3.0-or-later",
   "homepage": "https://github.com/firefly-iii/firefly-iii",
   "type": "project",
+  "readme": "readme.md",
   "authors": [
     {
       "name": "James Cole",
@@ -45,29 +46,46 @@
       "role": "Developer"
     }
   ],
+  "support": {
+    "email": "thegrumpydictator@gmail.com",
+    "issues": "https://github.com/firefly-iii/firefly-iii/issues",
+    "forum": "https://reddit.com/r/FireflyIII",
+    "wiki": "https://github.com/firefly-iii/help/wiki",
+    "source": "https://github.com/firefly-iii/firefly-iii",
+    "docs": "https://firefly-iii.readthedocs.io/en/latest/"
+  },
   "require": {
     "php": ">=7.2.0",
     "ext-bcmath": "*",
     "ext-curl": "*",
+    "ext-fileinfo": "*",
     "ext-gd": "*",
     "ext-intl": "*",
+    "ext-json": "*",
+    "ext-openssl": "*",
+    "ext-simplexml": "*",
+    "ext-tokenizer": "*",
     "ext-xml": "*",
     "ext-zip": "*",
+    "adldap2/adldap2-laravel": "5.*",
     "bacon/bacon-qr-code": "1.*",
-    "bunq/sdk_php": "dev-master#8c1faefc111d9b970168a1837ca165d854954941",
+    "bunq/sdk_php": "dev-master",
+    "danhunsaker/laravel-flysystem-others": "1.*",
     "davejamesmiller/laravel-breadcrumbs": "5.*",
     "doctrine/dbal": "2.*",
     "fideloper/proxy": "4.*",
-    "laravel/framework": "5.7.*",
-    "laravel/passport": "^7.0",
-    "laravelcollective/html": "5.7.*",
+    "laravel/framework": "5.8.*",
+    "laravel/passport": "7.*",
+    "laravelcollective/html": "5.8.*",
     "league/commonmark": "0.*",
     "league/csv": "9.*",
-    "league/fractal": "^0.17.0",
-    "pragmarx/google2fa": "3.*",
+    "league/flysystem-replicate-adapter": "1.*",
+    "league/flysystem-sftp": "1.*",
+    "league/fractal": "0.*",
+    "litipk/flysystem-fallback-adapter": "0.*",
+    "mschindler83/fints-hbci-php": "1.*",
     "pragmarx/google2fa-laravel": "0.*",
-    "rcrowe/twigbridge": "0.9.*",
-    "twig/twig": "1.*"
+    "rcrowe/twigbridge": "0.9.*"
   },
   "require-dev": {
     "barryvdh/laravel-ide-helper": "2.*",
@@ -75,9 +93,10 @@
     "fzaninotto/faker": "1.*",
     "johnkary/phpunit-speedtrap": "^3.0",
     "mockery/mockery": "1.*",
-    "php-coveralls/php-coveralls": "^2.0",
-    "phpunit/phpunit": "7.*",
+    "phpunit/phpunit": "8.*",
     "roave/security-advisories": "dev-master"
+  },
+  "suggest": {
   },
   "autoload": {
     "classmap": [
@@ -100,7 +119,7 @@
   },
   "scripts": {
     "pre-install-cmd": [
-      "@php -r \"if (!(getenv('DYNO'))===false){file_exists('.env') || copy('.env.heroku', '.env');}\""
+      "@php -r \"if (!(getenv('DYNO'))===false){file_exists('.env') || copy('.deploy/heroku/.env.heroku', '.env');copy('.deploy/heroku/.locales', '.locales');}\""
     ],
     "post-root-package-install": [
       "@php -r \"file_exists('.env') || copy('.env.example', '.env');\""
@@ -113,6 +132,7 @@
     ],
     "post-update-cmd": [
       "@php artisan firefly:upgrade-database",
+      "@php artisan firefly:decrypt-all",
       "@php artisan firefly:verify",
       "@php artisan firefly:instructions update",
       "@php artisan passport:install"

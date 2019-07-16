@@ -25,22 +25,25 @@ declare(strict_types=1);
 
 namespace FireflyIII\Console\Commands;
 
-use Crypt;
 use DB;
+use Exception;
 use FireflyIII\Models\Account;
+use FireflyIII\Models\AccountMeta;
 use FireflyIII\Models\AccountType;
 use FireflyIII\Models\Budget;
+use FireflyIII\Models\BudgetLimit;
 use FireflyIII\Models\Category;
 use FireflyIII\Models\LinkType;
 use FireflyIII\Models\PiggyBankEvent;
 use FireflyIII\Models\Transaction;
+use FireflyIII\Models\TransactionCurrency;
 use FireflyIII\Models\TransactionJournal;
 use FireflyIII\Models\TransactionType;
 use FireflyIII\Repositories\User\UserRepositoryInterface;
 use FireflyIII\User;
 use Illuminate\Console\Command;
-use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Collection;
 use Log;
 use Schema;
 use stdClass;
@@ -95,6 +98,8 @@ class VerifyDatabase extends Command
         $this->fixDoubleAmounts();
         $this->fixBadMeta();
         $this->removeBills();
+        $this->enableCurrencies();
+        $this->reportZeroAmount();
 
         return 0;
     }
@@ -148,6 +153,45 @@ class VerifyDatabase extends Command
         if (0 === $count) {
             $this->info('All link types OK!');
         }
+    }
+
+    /**
+     * Will make sure that all currencies in use are actually enabled.
+     */
+    private function enableCurrencies(): void
+    {
+        $found = [];
+        // get all meta entries
+        /** @var Collection $meta */
+        $meta = AccountMeta::where('name', 'currency_id')->groupBy('data')->get(['data']);
+        foreach ($meta as $entry) {
+            $found[] = (int)$entry->data;
+        }
+
+        // get all from journals:
+        /** @var Collection $journals */
+        $journals = TransactionJournal::groupBy('transaction_currency_id')->get(['transaction_currency_id']);
+        foreach ($journals as $entry) {
+            $found[] = (int)$entry->transaction_currency_id;
+        }
+
+        // get all from transactions
+        /** @var Collection $transactions */
+        $transactions = Transaction::groupBy('transaction_currency_id')->get(['transaction_currency_id']);
+        foreach ($transactions as $entry) {
+            $found[] = (int)$entry->transaction_currency_id;
+        }
+
+        // get all from budget limits
+        /** @var Collection $limits */
+        $limits = BudgetLimit::groupBy('transaction_currency_id')->get(['transaction_currency_id']);
+        foreach ($limits as $entry) {
+            $found[] = (int)$entry->transaction_currency_id;
+        }
+
+        $found = array_unique($found);
+        TransactionCurrency::whereIn('id', $found)->update(['enabled' => true]);
+
     }
 
     /**
@@ -406,12 +450,6 @@ class VerifyDatabase extends Command
         /** @var stdClass $entry */
         foreach ($set as $entry) {
             $objName = $entry->name;
-            try {
-                $objName = Crypt::decrypt($objName);
-            } catch (DecryptException $e) {
-                // it probably was not encrypted.
-                Log::debug(sprintf('Not a problem: %s', $e->getMessage()));
-            }
 
             // also count the transactions:
             $countTransactions = DB::table('budget_transaction')->where('budget_id', $entry->id)->count();
@@ -444,12 +482,6 @@ class VerifyDatabase extends Command
         /** @var stdClass $entry */
         foreach ($set as $entry) {
             $objName = $entry->name;
-            try {
-                $objName = Crypt::decrypt($objName);
-            } catch (DecryptException $e) {
-                // it probably was not encrypted.
-                Log::debug(sprintf('Not a problem: %s', $e->getMessage()));
-            }
 
             // also count the transactions:
             $countTransactions = DB::table('category_transaction')->where('category_id', $entry->id)->count();
@@ -583,12 +615,6 @@ class VerifyDatabase extends Command
         /** @var stdClass $entry */
         foreach ($set as $entry) {
             $objName = $entry->name;
-            try {
-                $objName = Crypt::decrypt($objName);
-            } catch (DecryptException $e) {
-                // it probably was not encrypted.
-                Log::debug(sprintf('Not a problem: %s', $e->getMessage()));
-            }
 
             $line = sprintf(
                 'User #%d (%s) has %s #%d ("%s") which has no transactions.',
@@ -665,4 +691,24 @@ class VerifyDatabase extends Command
             );
         }
     }
+
+    /**
+     * Collect all journals with empty amount.
+     */
+    private function reportZeroAmount(): void
+    {
+        $set = Transaction::where('amount', 0)->get(['transaction_journal_id'])->pluck('transaction_journal_id')->toArray();
+        $set = array_unique($set);
+        /** @var Collection $journals */
+        $journals = TransactionJournal::whereIn('id', $set)->get();
+        /** @var TransactionJournal $journal */
+        foreach ($journals as $journal) {
+            $message = sprintf(
+                'Transaction "%s" (#%d), owned by user %s, has amount zero (0.00). It should be deleted.', $journal->description,
+                $journal->id, $journal->user->email
+            );
+            $this->error($message);
+        }
+    }
+
 }

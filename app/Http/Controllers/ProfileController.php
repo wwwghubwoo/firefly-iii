@@ -41,6 +41,7 @@ use FireflyIII\User;
 use Google2FA;
 use Hash;
 use Illuminate\Contracts\Auth\Guard;
+use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Laravel\Passport\ClientRepository;
 use Log;
@@ -71,6 +72,7 @@ class ProfileController extends Controller
                 return $next($request);
             }
         );
+
         $this->middleware(IsDemoUser::class)->except(['index']);
         $this->middleware(IsSandStormUser::class)->except('index');
     }
@@ -78,10 +80,21 @@ class ProfileController extends Controller
     /**
      * Change your email address.
      *
+     * @param Request $request
+     *
      * @return \Illuminate\Contracts\View\Factory|\Illuminate\View\View
      */
-    public function changeEmail()
+    public function changeEmail(Request $request)
     {
+        $loginProvider = config('firefly.login_provider');
+        if ('eloquent' !== $loginProvider) {
+            // @codeCoverageIgnoreStart
+            $request->session()->flash('error', trans('firefly.login_provider_local_only', ['login_provider' => $loginProvider]));
+
+            return redirect(route('profile.index'));
+            // @codeCoverageIgnoreEnd
+        }
+
         $title        = auth()->user()->email;
         $email        = auth()->user()->email;
         $subTitle     = (string)trans('firefly.change_your_email');
@@ -93,10 +106,21 @@ class ProfileController extends Controller
     /**
      * Change your password.
      *
+     * @param Request $request
+     *
      * @return \Illuminate\Contracts\View\Factory|\Illuminate\View\View
      */
-    public function changePassword()
+    public function changePassword(Request $request)
     {
+        $loginProvider = config('firefly.login_provider');
+        if ('eloquent' !== $loginProvider) {
+            // @codeCoverageIgnoreStart
+            $request->session()->flash('error', trans('firefly.login_provider_local_only', ['login_provider' => $loginProvider]));
+
+            return redirect(route('profile.index'));
+            // @codeCoverageIgnoreEnd
+        }
+
         $title        = auth()->user()->email;
         $subTitle     = (string)trans('firefly.change_your_password');
         $subTitleIcon = 'fa-key';
@@ -115,7 +139,7 @@ class ProfileController extends Controller
         $secret = Google2FA::generateSecretKey();
         session()->flash('two-factor-secret', $secret);
 
-        $image = Google2FA::getQRCodeInline($domain, auth()->user()->email, $secret, 200);
+        $image = Google2FA::getQRCodeInline($domain, auth()->user()->email, $secret);
 
         return view('profile.code', compact('image', 'secret'));
     }
@@ -132,6 +156,12 @@ class ProfileController extends Controller
      */
     public function confirmEmailChange(UserRepositoryInterface $repository, string $token)
     {
+        $loginProvider = config('firefly.login_provider');
+        if ('eloquent' !== $loginProvider) {
+            // @codeCoverageIgnoreStart
+            throw new FireflyException('Cannot confirm email change when authentication provider is not local.');
+            // @codeCoverageIgnoreEnd
+        }
         // find preference with this token value.
         /** @var Collection $set */
         $set  = app('preferences')->findByName('email_change_confirm_token');
@@ -161,10 +191,18 @@ class ProfileController extends Controller
     /**
      * Delete your account view.
      *
+     * @param Request $request
+     *
      * @return \Illuminate\Contracts\View\Factory|\Illuminate\View\View
      */
-    public function deleteAccount()
+    public function deleteAccount(Request $request)
     {
+        $loginProvider = config('firefly.login_provider');
+        if ('eloquent' !== $loginProvider) {
+            // @codeCoverageIgnoreStart
+            $request->session()->flash('warning', trans('firefly.delete_local_info_only', ['login_provider' => $loginProvider]));
+            // @codeCoverageIgnoreEnd
+        }
         $title        = auth()->user()->email;
         $subTitle     = (string)trans('firefly.delete_account');
         $subTitleIcon = 'fa-trash';
@@ -216,6 +254,7 @@ class ProfileController extends Controller
      */
     public function index()
     {
+        $loginProvider = config('firefly.login_provider');
         // check if client token thing exists (default one)
         $count = DB::table('oauth_clients')
                    ->where('personal_access_client', 1)
@@ -241,7 +280,7 @@ class ProfileController extends Controller
             $accessToken = app('preferences')->set('access_token', $token);
         }
 
-        return view('profile.index', compact('subTitle', 'userId', 'accessToken', 'enabled2FA'));
+        return view('profile.index', compact('subTitle', 'userId', 'accessToken', 'enabled2FA', 'loginProvider'));
     }
 
     /**
@@ -254,6 +293,15 @@ class ProfileController extends Controller
      */
     public function postChangeEmail(EmailFormRequest $request, UserRepositoryInterface $repository)
     {
+        $loginProvider = config('firefly.login_provider');
+        if ('eloquent' !== $loginProvider) {
+            // @codeCoverageIgnoreStart
+            $request->session()->flash('error', trans('firefly.login_provider_local_only', ['login_provider' => $loginProvider]));
+
+            return redirect(route('profile.index'));
+            // @codeCoverageIgnoreEnd
+        }
+
         /** @var User $user */
         $user     = auth()->user();
         $newEmail = $request->string('email');
@@ -299,6 +347,15 @@ class ProfileController extends Controller
      */
     public function postChangePassword(ProfileFormRequest $request, UserRepositoryInterface $repository)
     {
+        $loginProvider = config('firefly.login_provider');
+        if ('eloquent' !== $loginProvider) {
+            // @codeCoverageIgnoreStart
+            $request->session()->flash('error', trans('firefly.login_provider_local_only', ['login_provider' => $loginProvider]));
+
+            return redirect(route('profile.index'));
+            // @codeCoverageIgnoreEnd
+        }
+
         // the request has already validated both new passwords must be equal.
         $current = $request->get('current_password');
         $new     = $request->get('new_password');
@@ -396,6 +453,13 @@ class ProfileController extends Controller
      */
     public function undoEmailChange(UserRepositoryInterface $repository, string $token, string $hash)
     {
+        $loginProvider = config('firefly.login_provider');
+        if ('eloquent' !== $loginProvider) {
+            // @codeCoverageIgnoreStart
+            throw new FireflyException('Cannot confirm email change when authentication provider is not local.');
+            // @codeCoverageIgnoreEnd
+        }
+
         // find preference with this token value.
         $set  = app('preferences')->findByName('email_change_undo_token');
         $user = null;

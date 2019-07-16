@@ -27,11 +27,15 @@ use Exception;
 use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Factory\TransactionJournalFactory;
 use FireflyIII\Factory\TransactionJournalMetaFactory;
+use FireflyIII\Helpers\Collector\TransactionCollectorInterface;
+use FireflyIII\Helpers\Filter\InternalTransferFilter;
 use FireflyIII\Models\Account;
 use FireflyIII\Models\AccountType;
+use FireflyIII\Models\Note;
 use FireflyIII\Models\PiggyBankEvent;
 use FireflyIII\Models\Transaction;
 use FireflyIII\Models\TransactionJournal;
+use FireflyIII\Models\TransactionJournalLink;
 use FireflyIII\Models\TransactionJournalMeta;
 use FireflyIII\Models\TransactionType;
 use FireflyIII\Services\Internal\Destroy\JournalDestroyService;
@@ -59,7 +63,7 @@ class JournalRepository implements JournalRepositoryInterface
      */
     public function __construct()
     {
-        if ('testing' === env('APP_ENV')) {
+        if ('testing' === config('app.env')) {
             Log::warning(sprintf('%s should not be instantiated in the TEST environment!', \get_class($this)));
         }
     }
@@ -261,6 +265,28 @@ class JournalRepository implements JournalRepositoryInterface
     }
 
     /**
+     * Return all attachments for journal.
+     *
+     * @param TransactionJournal $journal
+     *
+     * @return Collection
+     */
+    public function getAttachments(TransactionJournal $journal): Collection
+    {
+        return $journal->attachments;
+    }
+
+    /**
+     * @param Transaction $transaction
+     *
+     * @return Collection
+     */
+    public function getAttachmentsByTr(Transaction $transaction): Collection
+    {
+        return $transaction->transactionJournal->attachments()->get();
+    }
+
+    /**
      * Returns the first positive transaction for the journal. Useful when editing journals.
      *
      * @param TransactionJournal $journal
@@ -357,15 +383,16 @@ class JournalRepository implements JournalRepositoryInterface
      * Return a list of all destination accounts related to journal.
      *
      * @param TransactionJournal $journal
+     * @param bool               $useCache
      *
      * @return Collection
      */
-    public function getJournalDestinationAccounts(TransactionJournal $journal): Collection
+    public function getJournalDestinationAccounts(TransactionJournal $journal, bool $useCache = true): Collection
     {
         $cache = new CacheProperties;
         $cache->addProperty($journal->id);
         $cache->addProperty('destination-account-list');
-        if ($cache->has()) {
+        if ($useCache && $cache->has()) {
             return $cache->get(); // @codeCoverageIgnore
         }
         $transactions = $journal->transactions()->where('amount', '>', 0)->orderBy('transactions.account_id')->with('account')->get();
@@ -384,15 +411,16 @@ class JournalRepository implements JournalRepositoryInterface
      * Return a list of all source accounts related to journal.
      *
      * @param TransactionJournal $journal
+     * @param bool               $useCache
      *
      * @return Collection
      */
-    public function getJournalSourceAccounts(TransactionJournal $journal): Collection
+    public function getJournalSourceAccounts(TransactionJournal $journal, bool $useCache = true): Collection
     {
         $cache = new CacheProperties;
         $cache->addProperty($journal->id);
         $cache->addProperty('source-account-list');
-        if ($cache->has()) {
+        if ($useCache && $cache->has()) {
             return $cache->get(); // @codeCoverageIgnore
         }
         $transactions = $journal->transactions()->where('amount', '<', 0)->orderBy('transactions.account_id')->with('account')->get();
@@ -432,6 +460,23 @@ class JournalRepository implements JournalRepositoryInterface
     }
 
     /**
+     * @param TransactionJournalLink $link
+     *
+     * @return string
+     */
+    public function getLinkNoteText(TransactionJournalLink $link): string
+    {
+        $notes = null;
+        /** @var Note $note */
+        $note = $link->notes()->first();
+        if (null !== $note) {
+            return $note->text ?? '';
+        }
+
+        return '';
+    }
+
+    /**
      * Return Carbon value of a meta field (or NULL).
      *
      * @param TransactionJournal $journal
@@ -458,6 +503,24 @@ class JournalRepository implements JournalRepositoryInterface
         $cache->store($entry->data);
 
         return $value;
+    }
+
+    /**
+     * Return string value of a meta date (or NULL).
+     *
+     * @param TransactionJournal $journal
+     * @param string             $field
+     *
+     * @return null|string
+     */
+    public function getMetaDateString(TransactionJournal $journal, string $field): ?string
+    {
+        $date = $this->getMetaDate($journal, $field);
+        if (null === $date) {
+            return null;
+        }
+
+        return $date->format('Y-m-d');
     }
 
     /**
@@ -543,6 +606,16 @@ class JournalRepository implements JournalRepositoryInterface
     }
 
     /**
+     * @param Transaction $transaction
+     *
+     * @return Collection
+     */
+    public function getPiggyBankEventsbyTr(Transaction $transaction): Collection
+    {
+        return $transaction->transactionJournal->piggyBankEvents()->get();
+    }
+
+    /**
      * Return all tags as strings in an array.
      *
      * @param TransactionJournal $journal
@@ -581,14 +654,24 @@ class JournalRepository implements JournalRepositoryInterface
      */
     public function getTransactionsById(array $transactionIds): Collection
     {
-        $set = Transaction::leftJoin('transaction_journals', 'transaction_journals.id', '=', 'transactions.transaction_journal_id')
-                          ->whereIn('transactions.id', $transactionIds)
-                          ->where('transaction_journals.user_id', $this->user->id)
-                          ->whereNull('transaction_journals.deleted_at')
-                          ->whereNull('transactions.deleted_at')
-                          ->get(['transactions.*']);
+        $journalIds = Transaction::whereIn('id', $transactionIds)->get(['transaction_journal_id'])->pluck('transaction_journal_id')->toArray();
+        $journals   = new Collection;
+        foreach ($journalIds as $journalId) {
+            $result = $this->findNull((int)$journalId);
+            if (null !== $result) {
+                $journals->push($result);
+            }
+        }
+        /** @var TransactionCollectorInterface $collector */
+        $collector = app(TransactionCollectorInterface::class);
+        $collector->setUser($this->user);
+        $collector->setAllAssetAccounts();
+        $collector->removeFilter(InternalTransferFilter::class);
+        //$collector->addFilter(TransferFilter::class);
 
-        return $set;
+        $collector->setJournals($journals)->withOpposingAccount();
+
+        return $collector->getTransactions();
     }
 
     /**

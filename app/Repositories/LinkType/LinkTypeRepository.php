@@ -22,6 +22,7 @@ declare(strict_types=1);
 
 namespace FireflyIII\Repositories\LinkType;
 
+use Exception;
 use FireflyIII\Models\LinkType;
 use FireflyIII\Models\Note;
 use FireflyIII\Models\TransactionJournal;
@@ -45,7 +46,7 @@ class LinkTypeRepository implements LinkTypeRepositoryInterface
      */
     public function __construct()
     {
-        if ('testing' === env('APP_ENV')) {
+        if ('testing' === config('app.env')) {
             Log::warning(sprintf('%s should not be instantiated in the TEST environment!', \get_class($this)));
         }
     }
@@ -154,6 +155,22 @@ class LinkTypeRepository implements LinkTypeRepositoryInterface
     public function get(): Collection
     {
         return LinkType::orderBy('name', 'ASC')->get();
+    }
+
+    /**
+     * Return array of all journal ID's for this type of link.
+     *
+     * @param LinkType $linkType
+     *
+     * @return array
+     */
+    public function getJournalIds(LinkType $linkType): array
+    {
+        $links        = $linkType->transactionJournalLinks()->get(['source_id', 'destination_id']);
+        $sources      = $links->pluck('source_id')->toArray();
+        $destinations = $links->pluck('destination_id')->toArray();
+
+        return array_unique(array_merge($sources, $destinations));
     }
 
     /**
@@ -331,6 +348,7 @@ class LinkTypeRepository implements LinkTypeRepositoryInterface
      * @param string                 $text
      *
      * @SuppressWarnings(PHPMD.CyclomaticComplexity)
+     * @throws \Exception
      */
     private function setNoteText(TransactionJournalLink $link, string $text): void
     {
@@ -346,7 +364,11 @@ class LinkTypeRepository implements LinkTypeRepositoryInterface
             return;
         }
         if (null !== $dbNote && '' === $text) {
-            $dbNote->delete();
+            try {
+                $dbNote->delete();
+            } catch (Exception $e) {
+                Log::debug(sprintf('Could not delete note: %s', $e->getMessage()));
+            }
         }
 
     }

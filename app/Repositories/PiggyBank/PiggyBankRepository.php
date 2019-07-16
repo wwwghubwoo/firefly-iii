@@ -23,6 +23,7 @@ declare(strict_types=1);
 namespace FireflyIII\Repositories\PiggyBank;
 
 use Carbon\Carbon;
+use Exception;
 use FireflyIII\Models\Note;
 use FireflyIII\Models\PiggyBank;
 use FireflyIII\Models\PiggyBankEvent;
@@ -49,7 +50,7 @@ class PiggyBankRepository implements PiggyBankRepositoryInterface
      */
     public function __construct()
     {
-        if ('testing' === env('APP_ENV')) {
+        if ('testing' === config('app.env')) {
             Log::warning(sprintf('%s should not be instantiated in the TEST environment!', \get_class($this)));
         }
     }
@@ -309,6 +310,24 @@ class PiggyBankRepository implements PiggyBankRepositoryInterface
     }
 
     /**
+     * Return note for piggy bank.
+     *
+     * @param PiggyBank $piggyBank
+     *
+     * @return string
+     */
+    public function getNoteText(PiggyBank $piggyBank): string
+    {
+        /** @var Note $note */
+        $note = $piggyBank->notes()->first();
+        if (null === $note) {
+            return '';
+        }
+
+        return $note->text;
+    }
+
+    /**
      * @return Collection
      */
     public function getPiggyBanks(): Collection
@@ -379,6 +398,31 @@ class PiggyBankRepository implements PiggyBankRepositoryInterface
         }
 
         return $savePerMonth;
+    }
+
+    /**
+     * @param PiggyBankEvent $event
+     *
+     * @return int|null
+     */
+    public function getTransactionWithEvent(PiggyBankEvent $event): ?int
+    {
+        $journal = $event->transactionJournal;
+        if (null === $journal) {
+            return null;
+        }
+        if ((float)$event->amount < 0) {
+            $transaction = $journal->transactions()->where('amount', '<', 0)->first();
+
+            return $transaction->id ?? null;
+        }
+        if ((float)$event->amount > 0) {
+            $transaction = $journal->transactions()->where('amount', '>', 0)->first();
+
+            return $transaction->id ?? null;
+        }
+
+        return null;
     }
 
     /**
@@ -510,13 +554,18 @@ class PiggyBankRepository implements PiggyBankRepositoryInterface
      * @param string    $note
      *
      * @return bool
+     * @throws \Exception
      */
     private function updateNote(PiggyBank $piggyBank, string $note): bool
     {
         if ('' === $note) {
             $dbNote = $piggyBank->notes()->first();
             if (null !== $dbNote) {
-                $dbNote->delete();
+                try {
+                    $dbNote->delete();
+                } catch (Exception $e) {
+                    Log::debug(sprintf('Could not delete note: %s', $e->getMessage()));
+                }
             }
 
             return true;

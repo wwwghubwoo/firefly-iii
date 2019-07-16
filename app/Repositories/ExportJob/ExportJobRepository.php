@@ -22,14 +22,12 @@ declare(strict_types=1);
 
 namespace FireflyIII\Repositories\ExportJob;
 
-use Carbon\Carbon;
-use Exception;
 use FireflyIII\Models\ExportJob;
 use FireflyIII\User;
 use Illuminate\Contracts\Filesystem\FileNotFoundException;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Log;
-use Storage;
 
 /**
  * Class ExportJobRepository.
@@ -44,7 +42,7 @@ class ExportJobRepository implements ExportJobRepositoryInterface
      */
     public function __construct()
     {
-        if ('testing' === env('APP_ENV')) {
+        if ('testing' === config('app.env')) {
             Log::warning(sprintf('%s should not be instantiated in the TEST environment!', \get_class($this)));
         }
     }
@@ -60,37 +58,6 @@ class ExportJobRepository implements ExportJobRepositoryInterface
         Log::debug(sprintf('Change status of job #%d to "%s"', $job->id, $status));
         $job->status = $status;
         $job->save();
-
-        return true;
-    }
-
-    /**
-     * @return bool
-     */
-    public function cleanup(): bool
-    {
-        $dayAgo = Carbon::now()->subDay();
-        $set    = ExportJob::where('created_at', '<', $dayAgo->format('Y-m-d H:i:s'))
-                           ->whereIn('status', ['never_started', 'export_status_finished', 'export_downloaded'])
-                           ->get();
-
-        // loop set:
-        /** @var ExportJob $entry */
-        foreach ($set as $entry) {
-            $key   = $entry->key;
-            $files = scandir(storage_path('export'), SCANDIR_SORT_NONE);
-            /** @var string $file */
-            foreach ($files as $file) {
-                if (0 === strpos($file, $key)) {
-                    unlink(storage_path('export') . DIRECTORY_SEPARATOR . $file);
-                }
-            }
-            try {
-                $entry->delete();
-            } catch (Exception $e) {
-                Log::debug(sprintf('Could not delete object: %s', $e->getMessage()));
-            }
-        }
 
         return true;
     }

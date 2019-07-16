@@ -26,9 +26,11 @@ use Carbon\Carbon;
 use FireflyIII\Helpers\Attachments\AttachmentHelperInterface;
 use FireflyIII\Helpers\Collector\TransactionCollectorInterface;
 use FireflyIII\Http\Requests\BillFormRequest;
+use FireflyIII\Models\Attachment;
 use FireflyIII\Models\Bill;
 use FireflyIII\Repositories\Bill\BillRepositoryInterface;
 use FireflyIII\TransactionRules\TransactionMatcher;
+use FireflyIII\Transformers\AttachmentTransformer;
 use FireflyIII\Transformers\BillTransformer;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -196,7 +198,11 @@ class BillController extends Controller
         $parameters = new ParameterBag();
         $parameters->set('start', $start);
         $parameters->set('end', $end);
-        $transformer = new BillTransformer($parameters);
+
+        /** @var BillTransformer $transformer */
+        $transformer = app(BillTransformer::class);
+        $transformer->setParameters($parameters);
+
         /** @var Collection $bills */
         $bills = $paginator->getCollection()->map(
             function (Bill $bill) use ($transformer) {
@@ -248,8 +254,8 @@ class BillController extends Controller
                 // simply fire off all rules?
                 /** @var TransactionMatcher $matcher */
                 $matcher = app(TransactionMatcher::class);
-                $matcher->setLimit(100000); // large upper limit
-                $matcher->setRange(100000); // large upper limit
+                $matcher->setSearchLimit(100000); // large upper limit
+                $matcher->setTriggeredLimit(100000); // large upper limit
                 $matcher->setRule($rule);
                 $matchingTransactions = $matcher->findTransactionsByRule();
                 $total                += $matchingTransactions->count();
@@ -294,7 +300,12 @@ class BillController extends Controller
         $parameters = new ParameterBag();
         $parameters->set('start', $start);
         $parameters->set('end', $end);
-        $resource                   = new Item($bill, new BillTransformer($parameters), 'bill');
+
+        /** @var BillTransformer $transformer */
+        $transformer = app(BillTransformer::class);
+        $transformer->setParameters($parameters);
+
+        $resource                   = new Item($bill, $transformer, 'bill');
         $object                     = $manager->createData($resource)->toArray();
         $object['data']['currency'] = $bill->transactionCurrency;
 
@@ -306,8 +317,21 @@ class BillController extends Controller
         $transactions = $collector->getPaginatedTransactions();
         $transactions->setPath(route('bills.show', [$bill->id]));
 
+        // transform any attachments as well.
+        $collection  = $this->billRepository->getAttachments($bill);
+        $attachments = new Collection;
+        if ($collection->count() > 0) {
+            /** @var AttachmentTransformer $transformer */
+            $transformer = app(AttachmentTransformer::class);
+            $attachments = $collection->each(
+                function (Attachment $attachment) use ($transformer) {
+                    return $transformer->transform($attachment);
+                }
+            );
+        }
 
-        return view('bills.show', compact('transactions', 'rules', 'yearAverage', 'overallAverage', 'year', 'object', 'bill', 'subTitle'));
+
+        return view('bills.show', compact('attachments', 'transactions', 'rules', 'yearAverage', 'overallAverage', 'year', 'object', 'bill', 'subTitle'));
     }
 
 

@@ -40,7 +40,6 @@ interface CategoryRepositoryInterface
      */
     public function destroy(Category $category): bool;
 
-    /** @noinspection MoreThanThreeArgumentsInspection */
     /**
      * @param Collection $categories
      * @param Collection $accounts
@@ -52,6 +51,7 @@ interface CategoryRepositoryInterface
     public function earnedInPeriod(Collection $categories, Collection $accounts, Carbon $start, Carbon $end): string;
 
     /** @noinspection MoreThanThreeArgumentsInspection */
+
     /**
      * @param Collection $categories
      * @param Collection $accounts
@@ -61,6 +61,31 @@ interface CategoryRepositoryInterface
      * @return Collection
      */
     public function earnedInPeriodCollection(Collection $categories, Collection $accounts, Carbon $start, Carbon $end): Collection;
+
+    /** @noinspection MoreThanThreeArgumentsInspection */
+
+    /**
+     * A very cryptic method name that means:
+     *
+     * Get me the amount earned in this period, grouped per currency, where no category was set.
+     *
+     * @param Collection $accounts
+     * @param Carbon     $start
+     * @param Carbon     $end
+     *
+     * @return array
+     */
+    public function earnedInPeriodPcWoCategory(Collection $accounts, Carbon $start, Carbon $end): array;
+
+    /**
+     * @param Collection $categories
+     * @param Collection $accounts
+     * @param Carbon     $start
+     * @param Carbon     $end
+     *
+     * @return array
+     */
+    public function earnedInPeriodPerCurrency(Collection $categories, Collection $accounts, Carbon $start, Carbon $end): array;
 
     /**
      * Find a category.
@@ -103,6 +128,8 @@ interface CategoryRepositoryInterface
      */
     public function getCategories(): Collection;
 
+    /** @noinspection MoreThanThreeArgumentsInspection */
+
     /**
      * Return most recent transaction(journal) date or null when never used before.
      *
@@ -113,7 +140,6 @@ interface CategoryRepositoryInterface
      */
     public function lastUseDate(Category $category, Collection $accounts): ?Carbon;
 
-    /** @noinspection MoreThanThreeArgumentsInspection */
     /**
      * @param Collection $categories
      * @param Collection $accounts
@@ -124,6 +150,8 @@ interface CategoryRepositoryInterface
      */
     public function periodExpenses(Collection $categories, Collection $accounts, Carbon $start, Carbon $end): array;
 
+    /** @noinspection MoreThanThreeArgumentsInspection */
+
     /**
      * @param Collection $accounts
      * @param Carbon     $start
@@ -133,7 +161,6 @@ interface CategoryRepositoryInterface
      */
     public function periodExpensesNoCategory(Collection $accounts, Carbon $start, Carbon $end): array;
 
-    /** @noinspection MoreThanThreeArgumentsInspection */
     /**
      * @param Collection $categories
      * @param Collection $accounts
@@ -153,12 +180,24 @@ interface CategoryRepositoryInterface
      */
     public function periodIncomeNoCategory(Collection $accounts, Carbon $start, Carbon $end): array;
 
+    /** @noinspection MoreThanThreeArgumentsInspection */
+
+    /**
+     * @param string $query
+     *
+     * @return Collection
+     */
+    public function searchCategory(string $query): Collection;
+
+    /** @noinspection MoreThanThreeArgumentsInspection */
+
     /**
      * @param User $user
      */
     public function setUser(User $user);
 
     /** @noinspection MoreThanThreeArgumentsInspection */
+
     /**
      * @param Collection $categories
      * @param Collection $accounts
@@ -169,7 +208,6 @@ interface CategoryRepositoryInterface
      */
     public function spentInPeriod(Collection $categories, Collection $accounts, Carbon $start, Carbon $end): string;
 
-    /** @noinspection MoreThanThreeArgumentsInspection */
     /**
      * @param Collection $categories
      * @param Collection $accounts
@@ -180,8 +218,6 @@ interface CategoryRepositoryInterface
      */
     public function spentInPeriodCollection(Collection $categories, Collection $accounts, Carbon $start, Carbon $end): Collection;
 
-    /** @noinspection MoreThanThreeArgumentsInspection */
-
     /**
      * A very cryptic method name that means:
      *
@@ -191,7 +227,7 @@ interface CategoryRepositoryInterface
      * @param Carbon     $start
      * @param Carbon     $end
      *
-     * @return string
+     * @return array
      */
     public function spentInPeriodPcWoCategory(Collection $accounts, Carbon $start, Carbon $end): array;
 

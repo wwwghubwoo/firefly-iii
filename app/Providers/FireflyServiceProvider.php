@@ -22,6 +22,7 @@ declare(strict_types=1);
 
 namespace FireflyIII\Providers;
 
+use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Export\ExpandedProcessor;
 use FireflyIII\Export\ProcessorInterface;
 use FireflyIII\Generator\Chart\Basic\ChartJsGenerator;
@@ -47,7 +48,6 @@ use FireflyIII\Helpers\Report\ReportHelperInterface;
 use FireflyIII\Repositories\User\UserRepository;
 use FireflyIII\Repositories\User\UserRepositoryInterface;
 use FireflyIII\Services\Currency\ExchangeRateInterface;
-use FireflyIII\Services\Currency\FixerIOv2;
 use FireflyIII\Services\IP\IpifyOrg;
 use FireflyIII\Services\IP\IPRetrievalInterface;
 use FireflyIII\Services\Password\PwndVerifierV2;
@@ -71,6 +71,7 @@ use FireflyIII\Validation\FireflyValidator;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\ServiceProvider;
 use Twig;
+use Twig_Extension_Debug;
 use TwigBridge\Extension\Loader\Functions;
 use Validator;
 
@@ -95,7 +96,7 @@ class FireflyServiceProvider extends ServiceProvider
             }
         );
         $config = app('config');
-        Twig::addExtension(new Functions($config));
+        //Twig::addExtension(new Functions($config));
         Twig::addRuntimeLoader(new TransactionLoader);
         Twig::addRuntimeLoader(new AccountLoader);
         Twig::addRuntimeLoader(new TransactionJournalLoader);
@@ -105,6 +106,7 @@ class FireflyServiceProvider extends ServiceProvider
         Twig::addExtension(new Transaction);
         Twig::addExtension(new Rule);
         Twig::addExtension(new AmountFormat);
+        //Twig::addExtension(new Twig_Extension_Debug);
     }
 
     /**
@@ -183,7 +185,11 @@ class FireflyServiceProvider extends ServiceProvider
         $this->app->bind(FiscalHelperInterface::class, FiscalHelper::class);
         $this->app->bind(BalanceReportHelperInterface::class, BalanceReportHelper::class);
         $this->app->bind(BudgetReportHelperInterface::class, BudgetReportHelper::class);
-        $this->app->bind(ExchangeRateInterface::class, FixerIOv2::class);
+        $class = (string)config(sprintf('firefly.cer_providers.%s', (string)config('firefly.cer_provider')));
+        if ('' === $class) {
+            throw new FireflyException('Invalid currency exchange rate provider. Cannot continue.');
+        }
+        $this->app->bind(ExchangeRateInterface::class, $class);
 
         // password verifier thing
         $this->app->bind(Verifier::class, PwndVerifierV2::class);

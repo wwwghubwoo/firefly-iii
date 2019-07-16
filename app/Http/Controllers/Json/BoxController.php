@@ -243,7 +243,7 @@ class BoxController extends Controller
      */
     public function netWorth(): JsonResponse
     {
-        $date = Carbon::create()->startOfDay();
+        $date = Carbon::now()->startOfDay();
 
         // start and end in the future? use $end
         if ($this->notInSessionRange($date)) {
@@ -257,7 +257,7 @@ class BoxController extends Controller
 
         /** @var AccountRepositoryInterface $accountRepository */
         $accountRepository = app(AccountRepositoryInterface::class);
-        $allAccounts = $accountRepository->getActiveAccountsByType(
+        $allAccounts       = $accountRepository->getActiveAccountsByType(
             [AccountType::DEFAULT, AccountType::ASSET, AccountType::DEBT, AccountType::LOAN, AccountType::MORTGAGE, AccountType::CREDITCARD]
         );
         Log::debug(sprintf('Found %d accounts.', $allAccounts->count()));
@@ -281,7 +281,7 @@ class BoxController extends Controller
         $return = [];
         foreach ($netWorthSet as $index => $data) {
             /** @var TransactionCurrency $currency */
-            $currency = $data['currency'];
+            $currency              = $data['currency'];
             $return[$currency->id] = app('amount')->formatAnything($currency, $data['balance'], false);
         }
         $return = [

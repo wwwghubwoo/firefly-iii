@@ -25,42 +25,24 @@ namespace FireflyIII\Transformers;
 
 
 use FireflyIII\Models\LinkType;
-use League\Fractal\TransformerAbstract;
-use Symfony\Component\HttpFoundation\ParameterBag;
+use Log;
 
 /**
  *
  * Class LinkTypeTransformer
  */
-class LinkTypeTransformer extends TransformerAbstract
+class LinkTypeTransformer extends AbstractTransformer
 {
-
-    /**
-     * List of resources possible to include
-     *
-     * @var array
-     */
-    protected $availableIncludes = [];
-    /**
-     * List of resources to automatically include
-     *
-     * @var array
-     */
-    protected $defaultIncludes = [];
-
-    /** @var ParameterBag */
-    protected $parameters;
-
     /**
      * CurrencyTransformer constructor.
      *
      * @codeCoverageIgnore
-     *
-     * @param ParameterBag $parameters
      */
-    public function __construct(ParameterBag $parameters)
+    public function __construct()
     {
-        $this->parameters = $parameters;
+        if ('testing' === config('app.env')) {
+            Log::warning(sprintf('%s should not be instantiated in the TEST environment!', \get_class($this)));
+        }
     }
 
     /**
@@ -74,12 +56,12 @@ class LinkTypeTransformer extends TransformerAbstract
     {
         $data = [
             'id'         => (int)$linkType->id,
-            'updated_at' => $linkType->updated_at->toAtomString(),
             'created_at' => $linkType->created_at->toAtomString(),
+            'updated_at' => $linkType->updated_at->toAtomString(),
             'name'       => $linkType->name,
             'inward'     => $linkType->inward,
             'outward'    => $linkType->outward,
-            'editable'   => 1 === (int)$linkType->editable,
+            'editable'   => $linkType->editable,
             'links'      => [
                 [
                     'rel' => 'self',

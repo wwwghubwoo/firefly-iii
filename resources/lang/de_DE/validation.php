@@ -24,6 +24,8 @@ declare(strict_types=1);
 
 return [
     'iban'                           => 'Dies ist keine gültige IBAN.',
+    'zero_or_more'                   => 'Der Wert darf nicht negativ sein.',
+    'date_or_time'                   => 'Der Wert muss ein gültiges Datum oder Zeitangabe sein (ISO 8601).',
     'source_equals_destination'      => 'Das Quellkonto entspricht dem Zielkonto.',
     'unique_account_number_for_user' => 'Diese Kontonummer scheint bereits verwendet zu sein.',
     'unique_iban_for_user'           => 'Dieser IBAN scheint bereits verwendet zu werden.',
@@ -122,7 +124,7 @@ return [
     'present'                        => 'Das :attribute Feld muss vorhanden sein.',
     'amount_zero'                    => 'Der Gesamtbetrag darf nicht Null sein.',
     'unique_piggy_bank_for_user'     => 'Der Name des Sparschweins muss eindeutig sein.',
-    'secure_password'                => 'Dies ist kein sicheres Passwort. Bitte versuchen Sie es erneut. Weitere Informationen finden Sie unter https://github.com/firefly-iii/help/wiki/Secure-password (engl.).',
+    'secure_password'                => 'Dies ist ein unsicheres Passwort. Bitte versuchen Sie es erneut. Weitere Informationen finden Sie unter https://github.com/firefly-iii/help/wiki/Secure-password',
     'valid_recurrence_rep_type'      => 'Ungültige Wiederholungsart für Daueraufträge.',
     'valid_recurrence_rep_moment'    => 'Ungültiges Wiederholungsmoment für diese Art der Wiederholung.',
     'invalid_account_info'           => 'Ungültige Kontodaten.',

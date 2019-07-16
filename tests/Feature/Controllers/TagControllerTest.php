@@ -24,6 +24,7 @@ namespace Tests\Feature\Controllers;
 
 use Carbon\Carbon;
 use FireflyIII\Helpers\Collector\TransactionCollectorInterface;
+use FireflyIII\Helpers\FiscalHelperInterface;
 use FireflyIII\Models\Tag;
 use FireflyIII\Models\TransactionJournal;
 use FireflyIII\Models\TransactionType;
@@ -31,6 +32,7 @@ use FireflyIII\Repositories\Journal\JournalRepositoryInterface;
 use FireflyIII\Repositories\Tag\TagRepositoryInterface;
 use FireflyIII\Repositories\User\UserRepositoryInterface;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Collection;
 use Log;
 use Mockery;
 use Tests\TestCase;
@@ -173,11 +175,13 @@ class TagControllerTest extends TestCase
         $userRepos->shouldReceive('hasRole')->withArgs([Mockery::any(), 'owner'])->atLeast()->once()->andReturn(true);
 
         $journalRepos->shouldReceive('firstNull')->once()->andReturn(new TransactionJournal);
-        $repository->shouldReceive('spentInPeriod')->andReturn('-1')->times(1);
+
         $repository->shouldReceive('firstUseDate')->andReturn(new Carbon)->once();
-        $repository->shouldReceive('lastUseDate')->andReturn(new Carbon)->once();
-        $repository->shouldReceive('earnedInPeriod')->andReturn('1')->times(1);
         $repository->shouldReceive('sumsOfTag')->andReturn($amounts)->once();
+
+        $repository->shouldReceive('expenseInPeriod')->andReturn(new Collection)->atLeast()->times(1);
+        $repository->shouldReceive('incomeInPeriod')->andReturn(new Collection)->atLeast()->times(1);
+        $repository->shouldReceive('transferredInPeriod')->andReturn(new Collection)->atLeast()->times(1);
 
         $collector->shouldReceive('removeFilter')->andReturnSelf()->once();
         $collector->shouldReceive('setAllAssetAccounts')->andReturnSelf()->once();
@@ -245,13 +249,19 @@ class TagControllerTest extends TestCase
         $collector    = $this->mock(TransactionCollectorInterface::class);
         $journalRepos = $this->mock(JournalRepositoryInterface::class);
         $userRepos = $this->mock(UserRepositoryInterface::class);
+        $fiscalHelper  = $this->mock(FiscalHelperInterface::class);
+        $date          = new Carbon;
+        $fiscalHelper->shouldReceive('endOfFiscalYear')->atLeast()->once()->andReturn($date);
+        $fiscalHelper->shouldReceive('startOfFiscalYear')->atLeast()->once()->andReturn($date);
 
         $userRepos->shouldReceive('hasRole')->withArgs([Mockery::any(), 'owner'])->atLeast()->once()->andReturn(true);
         $journalRepos->shouldReceive('firstNull')->once()->andReturn(new TransactionJournal);
-        $repository->shouldReceive('spentInPeriod')->andReturn('-1')->times(1);
         $repository->shouldReceive('firstUseDate')->andReturn(new Carbon)->once();
-        $repository->shouldReceive('lastUseDate')->andReturn(new Carbon)->once();
-        $repository->shouldReceive('earnedInPeriod')->andReturn('1')->times(1);
+
+        $repository->shouldReceive('expenseInPeriod')->andReturn(new Collection)->atLeast()->times(1);
+        $repository->shouldReceive('incomeInPeriod')->andReturn(new Collection)->atLeast()->times(1);
+        $repository->shouldReceive('transferredInPeriod')->andReturn(new Collection)->atLeast()->times(1);
+
 
         $collector->shouldReceive('removeFilter')->andReturnSelf()->once();
         $collector->shouldReceive('setAllAssetAccounts')->andReturnSelf()->once();

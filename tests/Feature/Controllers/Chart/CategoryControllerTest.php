@@ -24,6 +24,7 @@ namespace Tests\Feature\Controllers\Chart;
 
 use Carbon\Carbon;
 use FireflyIII\Generator\Chart\Basic\GeneratorInterface;
+use FireflyIII\Helpers\FiscalHelperInterface;
 use FireflyIII\Models\Account;
 use FireflyIII\Models\AccountType;
 use FireflyIII\Models\TransactionCurrency;
@@ -63,6 +64,7 @@ class CategoryControllerTest extends TestCase
         $firstUse     = new Carbon;
         $firstUse->subDays(3);
 
+
         $repository->shouldReceive('spentInPeriod')->andReturn('0');
         $repository->shouldReceive('earnedInPeriod')->andReturn('0');
         $repository->shouldReceive('firstUseDate')->andReturn($firstUse)->once();
@@ -81,7 +83,7 @@ class CategoryControllerTest extends TestCase
      *
      * @param string $range
      */
-    public function testFrontpage(string $range): void
+    public function testFrontPage(string $range): void
     {
         $repository    = $this->mock(CategoryRepositoryInterface::class);
         $accountRepos  = $this->mock(AccountRepositoryInterface::class);
@@ -89,9 +91,29 @@ class CategoryControllerTest extends TestCase
         $currencyRepos = $this->mock(CurrencyRepositoryInterface::class);
 
         // spent per currency data:
-        $spentData = [
-            1 => '-123.45',
-            2 => '567.21',
+        $spentNoCategory = [
+            1 =>
+                [
+                    'spent'                   => '-123.45',
+                    'currency_id'             => 1,
+                    'currency_code'           => 'X',
+                    'currency_symbol'         => 'x',
+                    'currency_decimal_places' => 2,
+                ],
+        ];
+        $spentData       = [
+            1 => [
+                'name'  => 'Car',
+                'spent' => [
+                    1 => [
+                        'spent'                   => '-123.45',
+                        'currency_id'             => 2,
+                        'currency_code'           => 'a',
+                        'currency_symbol'         => 'b',
+                        'currency_decimal_places' => 2,
+                    ],
+                ],
+            ],
         ];
 
         // grab two categories from the user
@@ -104,20 +126,10 @@ class CategoryControllerTest extends TestCase
         $repository->shouldReceive('getCategories')->andReturn($categories)->once();
         $accountRepos->shouldReceive('getAccountsByType')->once()->withArgs([[AccountType::ASSET, AccountType::DEFAULT]])->andReturn($accounts);
 
-        $repository->shouldReceive('spentInPeriodPerCurrency')
-                   ->times(2)->andReturn($spentData);
-        $repository->shouldReceive('spentInPeriodPcWoCategory')->once()->andReturn($spentData);
+        $repository->shouldReceive('spentInPeriodPerCurrency')->times(2)->andReturn($spentData);
+        $repository->shouldReceive('spentInPeriodPcWoCategory')->once()->andReturn($spentNoCategory);
 
         $currencyRepos->shouldReceive('findNull')->withArgs([1])->once()->andReturn(TransactionCurrency::find(1));
-        $currencyRepos->shouldReceive('findNull')->withArgs([2])->once()->andReturn(TransactionCurrency::find(2));
-
-        //$category     = factory(Category::class)->make();
-        //$account      = factory(Account::class)->make();
-
-
-        //        $accountRepos->shouldReceive('getAccountsByType')->andReturn(new Collection([$account]));
-        //        $repository->shouldReceive('spentInPeriod')->andReturn('0');
-        //        $repository->shouldReceive('spentInPeriodWithoutCategory')->andReturn('0');
         $generator->shouldReceive('multiSet')->andReturn([]);
 
         $this->be($this->user());
@@ -131,9 +143,12 @@ class CategoryControllerTest extends TestCase
      */
     public function testReportPeriod(): void
     {
-        $repository = $this->mock(CategoryRepositoryInterface::class);
-        $generator  = $this->mock(GeneratorInterface::class);
-
+        $repository   = $this->mock(CategoryRepositoryInterface::class);
+        $generator    = $this->mock(GeneratorInterface::class);
+        $fiscalHelper = $this->mock(FiscalHelperInterface::class);
+        $date         = new Carbon;
+        $fiscalHelper->shouldReceive('endOfFiscalYear')->atLeast()->once()->andReturn($date);
+        $fiscalHelper->shouldReceive('startOfFiscalYear')->atLeast()->once()->andReturn($date);
         $repository->shouldReceive('periodExpenses')->andReturn([])->once();
         $repository->shouldReceive('periodIncome')->andReturn([])->once();
         $generator->shouldReceive('multiSet')->andReturn([])->once();
@@ -148,9 +163,12 @@ class CategoryControllerTest extends TestCase
      */
     public function testReportPeriodNoCategory(): void
     {
-        $repository = $this->mock(CategoryRepositoryInterface::class);
-        $generator  = $this->mock(GeneratorInterface::class);
-
+        $repository   = $this->mock(CategoryRepositoryInterface::class);
+        $generator    = $this->mock(GeneratorInterface::class);
+        $fiscalHelper = $this->mock(FiscalHelperInterface::class);
+        $date         = new Carbon;
+        $fiscalHelper->shouldReceive('endOfFiscalYear')->atLeast()->once()->andReturn($date);
+        $fiscalHelper->shouldReceive('startOfFiscalYear')->atLeast()->once()->andReturn($date);
         $repository->shouldReceive('periodExpensesNoCategory')->andReturn([])->once();
         $repository->shouldReceive('periodIncomeNoCategory')->andReturn([])->once();
         $generator->shouldReceive('multiSet')->andReturn([])->once();
@@ -172,6 +190,10 @@ class CategoryControllerTest extends TestCase
         $accountRepos = $this->mock(AccountRepositoryInterface::class);
         $generator    = $this->mock(GeneratorInterface::class);
         $account      = factory(Account::class)->make();
+        $fiscalHelper = $this->mock(FiscalHelperInterface::class);
+        $date         = new Carbon;
+        $fiscalHelper->shouldReceive('endOfFiscalYear')->atLeast()->once()->andReturn($date);
+        $fiscalHelper->shouldReceive('startOfFiscalYear')->atLeast()->once()->andReturn($date);
 
         $accountRepos->shouldReceive('getAccountsByType')->andReturn(new Collection([$account]));
         $repository->shouldReceive('spentInPeriod')->andReturn('0');

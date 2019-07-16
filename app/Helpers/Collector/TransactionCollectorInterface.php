@@ -27,6 +27,7 @@ use Carbon\Carbon;
 use FireflyIII\Models\Budget;
 use FireflyIII\Models\Category;
 use FireflyIII\Models\Tag;
+use FireflyIII\Models\TransactionCurrency;
 use FireflyIII\User;
 use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -83,13 +84,6 @@ interface TransactionCollectorInterface
     public function count(): int;
 
     /**
-     * Get all transactions.
-     *
-     * @return Collection
-     */
-    public function getTransactions(): Collection;
-
-    /**
      * Get a paginated result.
      *
      * @return LengthAwarePaginator
@@ -102,6 +96,13 @@ interface TransactionCollectorInterface
      * @return EloquentBuilder
      */
     public function getQuery(): EloquentBuilder;
+
+    /**
+     * Get all transactions.
+     *
+     * @return Collection
+     */
+    public function getTransactions(): Collection;
 
     /**
      * Set to ignore the cache.
@@ -199,6 +200,24 @@ interface TransactionCollectorInterface
     public function setCategory(Category $category): TransactionCollectorInterface;
 
     /**
+     * Set the required currency (local or foreign)
+     *
+     * @param TransactionCurrency $currency
+     *
+     * @return TransactionCollectorInterface
+     */
+    public function setCurrency(TransactionCurrency $currency): TransactionCollectorInterface;
+
+    /**
+     * Set the journal IDs to filter on.
+     *
+     * @param array $journalIds
+     *
+     * @return TransactionCollectorInterface
+     */
+    public function setJournalIds(array $journalIds): TransactionCollectorInterface;
+
+    /**
      * Set the journals to filter on.
      *
      * @param Collection $journals
@@ -252,6 +271,15 @@ interface TransactionCollectorInterface
      * @return TransactionCollectorInterface
      */
     public function setRange(Carbon $start, Carbon $end): TransactionCollectorInterface;
+
+    /**
+     * Search for words in descriptions.
+     *
+     * @param array $array
+     *
+     * @return TransactionCollectorInterface
+     */
+    public function setSearchWords(array $array): TransactionCollectorInterface;
 
     /**
      * Set the tag to collect from.

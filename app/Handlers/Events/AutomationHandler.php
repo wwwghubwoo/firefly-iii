@@ -45,6 +45,12 @@ class AutomationHandler
      */
     public function reportJournals(RequestedReportOnJournals $event): bool
     {
+        $sendReport = config('firefly.send_report_journals');
+
+        if (false === $sendReport) {
+            return true; // @codeCoverageIgnore
+        }
+
         Log::debug('In reportJournals.');
         /** @var UserRepositoryInterface $repository */
         $repository = app(UserRepositoryInterface::class);

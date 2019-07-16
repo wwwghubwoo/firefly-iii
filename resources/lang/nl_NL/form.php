@@ -30,6 +30,7 @@ return [
     'credit_card_limit'           => 'Credit card limiet',
     'automatch'                   => 'Automatisch herkennen',
     'skip'                        => 'Overslaan',
+    'enabled'                     => 'Ingeschakeld',
     'name'                        => 'Naam',
     'active'                      => 'Actief',
     'amount_min'                  => 'Minimumbedrag',
@@ -44,6 +45,7 @@ return [
     'attachments'                 => 'Bijlagen',
     'journal_amount'              => 'Bedrag',
     'journal_source_name'         => 'Debiteur (bron)',
+    'keep_bill_id'                => 'Contract',
     'journal_source_id'           => 'Betaalrekening (bron)',
     'BIC'                         => 'BIC',
     'verify_password'             => 'Bevestig wachtwoordsterkte',
@@ -191,6 +193,7 @@ return [
     'password_confirmation' => 'Wachtwoord (nogmaals)',
     'blocked'               => 'Is geblokkeerd?',
     'blocked_code'          => 'Reden voor blokkade',
+    'login_name'            => 'Login',
 
     // import
     'apply_rules'           => 'Regels toepassen',
@@ -222,6 +225,16 @@ return [
     'public_key'            => 'Publieke sleutel',
     'country_code'          => 'Landcode',
     'provider_code'         => 'Bank of gegevensprovider',
+    'fints_url'             => 'FinTS API URL',
+    'fints_port'            => 'Poort',
+    'fints_bank_code'       => 'Bankcode',
+    'fints_username'        => 'Gebruikersnaam',
+    'fints_password'        => 'Pincode / wachtwoord',
+    'fints_account'         => 'FinTS-rekening',
+    'local_account'         => 'Firefly III rekening',
+    'from_date'             => 'Datum van',
+    'to_date'               => 'Datum tot',
+
 
     'due_date'                => 'Vervaldatum',
     'payment_date'            => 'Betalingsdatum',

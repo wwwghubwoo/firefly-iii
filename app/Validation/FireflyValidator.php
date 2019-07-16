@@ -23,7 +23,6 @@ declare(strict_types=1);
 namespace FireflyIII\Validation;
 
 use Config;
-use Crypt;
 use DB;
 use FireflyIII\Models\Account;
 use FireflyIII\Models\AccountMeta;
@@ -38,7 +37,6 @@ use FireflyIII\Services\Password\Verifier;
 use FireflyIII\TransactionRules\Triggers\TriggerInterface;
 use FireflyIII\User;
 use Google2FA;
-use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\Validator;
 
@@ -257,7 +255,7 @@ class FireflyValidator extends Validator
         $index = (int)($parts[1] ?? '0');
 
         // get the name of the trigger from the data array:
-        $actionType = $this->data['rule_actions'][$index]['name'] ?? 'invalid';
+        $actionType = $this->data['actions'][$index]['type'] ?? 'invalid';
 
         // if it's "invalid" return false.
         if ('invalid' === $actionType) {
@@ -306,23 +304,21 @@ class FireflyValidator extends Validator
     }
 
     /**
-     * $attribute has the format rule_triggers.%d.value.
+     * $attribute has the format triggers.%d.value.
      *
      * @param string $attribute
      * @param string $value
      *
      * @return bool
      */
-    public function validateRuleTriggerValue(string $attribute, string $value): bool
+    public function validateRuleTriggerValue(string $attribute, string $value = null): bool
     {
-        //
-
         // first, get the index from this string:
         $parts = explode('.', $attribute);
         $index = (int)($parts[1] ?? '0');
 
         // get the name of the trigger from the data array:
-        $triggerType = $this->data['rule_triggers'][$index]['name'] ?? 'invalid';
+        $triggerType = $this->data['triggers'][$index]['type'] ?? 'invalid';
 
         // invalid always returns false:
         if ('invalid' === $triggerType) {
@@ -469,7 +465,6 @@ class FireflyValidator extends Validator
      */
     public function validateUniqueObjectForUser($attribute, $value, $parameters): bool
     {
-        $value = $this->tryDecrypt($value);
         [$table, $field] = $parameters;
         $exclude = (int)($parameters[2] ?? 0.0);
 
@@ -488,7 +483,7 @@ class FireflyValidator extends Validator
                  ->where('id', '!=', $exclude)->get([$field]);
 
         foreach ($set as $entry) {
-            $fieldValue = $this->tryDecrypt($entry->$field);
+            $fieldValue = $entry->$field;
 
             if ($fieldValue === $value) {
                 return false;
@@ -520,29 +515,13 @@ class FireflyValidator extends Validator
         /** @var PiggyBank $entry */
         foreach ($set as $entry) {
 
-            $fieldValue = $this->tryDecrypt($entry->name);
+            $fieldValue = $entry->name;
             if ($fieldValue === $value) {
                 return false;
             }
         }
 
         return true;
-    }
-
-    /**
-     * @param $value
-     *
-     * @return mixed
-     */
-    private function tryDecrypt($value)
-    {
-        try {
-            $value = Crypt::decrypt($value);
-        } catch (DecryptException $e) {
-            //Log::debug(sprintf('Could not decrypt. %s', $e->getMessage()));
-        }
-
-        return $value;
     }
 
     /**
@@ -556,7 +535,7 @@ class FireflyValidator extends Validator
 
         $user  = User::find($this->data['user_id']);
         $type  = AccountType::find($this->data['account_type_id'])->first();
-        $value = $this->tryDecrypt($this->data['name']);
+        $value = $this->data['name'];
 
         $set = $user->accounts()->where('account_type_id', $type->id)->get();
         /** @var Account $entry */
@@ -581,7 +560,6 @@ class FireflyValidator extends Validator
 
         $type   = $existingAccount->accountType;
         $ignore = $existingAccount->id;
-        $value  = $this->tryDecrypt($value);
 
         /** @var Collection $set */
         $set = auth()->user()->accounts()->where('account_type_id', $type->id)->where('id', '!=', $ignore)->get();
@@ -605,7 +583,6 @@ class FireflyValidator extends Validator
     {
         $type   = AccountType::find($this->data['account_type_id'])->first();
         $ignore = (int)($parameters[0] ?? 0.0);
-        $value  = $this->tryDecrypt($value);
 
         /** @var Collection $set */
         $set = auth()->user()->accounts()->where('account_type_id', $type->id)->where('id', '!=', $ignore)->get();
@@ -630,6 +607,11 @@ class FireflyValidator extends Validator
     {
         /** @var array $search */
         $search = Config::get('firefly.accountTypeByIdentifier.' . $type);
+
+        if (null === $search) {
+            return false;
+        }
+
         /** @var Collection $accountTypes */
         $accountTypes   = AccountType::whereIn('type', $search)->get();
         $ignore         = (int)($parameters[0] ?? 0.0);

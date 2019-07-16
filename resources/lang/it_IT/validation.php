@@ -24,6 +24,8 @@ declare(strict_types=1);
 
 return [
     'iban'                           => 'Questo non è un IBAN valido.',
+    'zero_or_more'                   => 'Il valore non può essere negativo.',
+    'date_or_time'                   => 'Il valore deve essere un valore valido per una data o per un orario (ISO 8601).',
     'source_equals_destination'      => 'Il conto di origine è uguale al conto di destinazione.',
     'unique_account_number_for_user' => 'Sembra che questo numero di conto sia già in uso.',
     'unique_iban_for_user'           => 'Sembra che questo IBAN sia già in uso.',
@@ -122,7 +124,7 @@ return [
     'present'                        => ':attribute il campo deve essere presente.',
     'amount_zero'                    => 'L\'importo totale non può essere zero.',
     'unique_piggy_bank_for_user'     => 'Il nome del salvadanaio deve essere unico.',
-    'secure_password'                => 'Questa non è una password sicura. Riprova. Per maggiori informazioni visita http://bit.ly/FF3-password-security.',
+    'secure_password'                => 'Questa non è una password sicura. Riprova. Per maggiori informazioni visita https://bit.ly/FF3-password-security',
     'valid_recurrence_rep_type'      => 'Il tipo di ripetizione della transazione ricorrente non è valido.',
     'valid_recurrence_rep_moment'    => 'Il momento di ripetizione per questo tipo di ripetizione non è valido.',
     'invalid_account_info'           => 'Informazione sul conto non valida.',
@@ -134,7 +136,7 @@ return [
         'piggy_bank_id'           => 'ID salvadanaio',
         'targetamount'            => 'importo obiettivo',
         'openingBalanceDate'      => 'data saldo di apertura',
-        'openingBalance'          => 'saldo apertura',
+        'openingBalance'          => 'saldo di apertura',
         'match'                   => 'abbinamento',
         'amount_min'              => 'importo minimo',
         'amount_max'              => 'importo massimo',

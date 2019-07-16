@@ -56,6 +56,13 @@ interface ImportJobRepositoryInterface
     public function appendTransactions(ImportJob $job, array $transactions): ImportJob;
 
     /**
+     * @param ImportJob $job
+     *
+     * @return int
+     */
+    public function countTransactions(ImportJob $job): int;
+
+    /**
      * @param string $importProvider
      *
      * @return ImportJob
@@ -63,11 +70,25 @@ interface ImportJobRepositoryInterface
     public function create(string $importProvider): ImportJob;
 
     /**
+     * @param int $jobId
+     *
+     * @return ImportJob|null
+     */
+    public function find(int $jobId): ?ImportJob;
+
+    /**
      * @param string $key
      *
      * @return ImportJob|null
      */
     public function findByKey(string $key): ?ImportJob;
+
+    /**
+     * Return all import jobs.
+     *
+     * @return Collection
+     */
+    public function get(): Collection;
 
     /**
      * Return all attachments for job.
@@ -95,6 +116,15 @@ interface ImportJobRepositoryInterface
      * @return array
      */
     public function getExtendedStatus(ImportJob $job): array;
+
+    /**
+     * Return transactions from attachment.
+     *
+     * @param ImportJob $job
+     *
+     * @return array
+     */
+    public function getTransactions(ImportJob $job): array;
 
     /**
      * @param ImportJob $job

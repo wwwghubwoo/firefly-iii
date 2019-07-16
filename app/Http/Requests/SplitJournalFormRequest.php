@@ -95,7 +95,7 @@ class SplitJournalFormRequest extends Request
                 'foreign_currency_code' => null,
                 'reconciled'            => false,
                 'identifier'            => $index,
-                'currency_id'           => (int)$transaction['transaction_currency_id'],
+                'currency_id'           => (int)$transaction['currency_id'],
                 'currency_code'         => null,
                 'description'           => $transaction['transaction_description'] ?? '',
                 'amount'                => $transaction['amount'] ?? '',
@@ -168,8 +168,10 @@ class SplitJournalFormRequest extends Request
         /** @var array $array */
         foreach ($transactions as $array) {
             if (null !== $array['destination_id'] && null !== $array['source_id'] && $array['destination_id'] === $array['source_id']) {
+                // @codeCoverageIgnoreStart
                 $validator->errors()->add('journal_source_id', (string)trans('validation.source_equals_destination'));
                 $validator->errors()->add('journal_destination_id', (string)trans('validation.source_equals_destination'));
+                // @codeCoverageIgnoreEnd
             }
         }
 

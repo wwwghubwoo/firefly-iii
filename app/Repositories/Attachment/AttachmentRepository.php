@@ -33,8 +33,8 @@ use FireflyIII\Models\Note;
 use FireflyIII\User;
 use Illuminate\Contracts\Filesystem\FileNotFoundException;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Storage;
 use Log;
-use Storage;
 
 /**
  * Class AttachmentRepository.
@@ -50,7 +50,7 @@ class AttachmentRepository implements AttachmentRepositoryInterface
      */
     public function __construct()
     {
-        if ('testing' === env('APP_ENV')) {
+        if ('testing' === config('app.env')) {
             Log::warning(sprintf('%s should not be instantiated in the TEST environment!', \get_class($this)));
         }
     }
@@ -66,9 +66,9 @@ class AttachmentRepository implements AttachmentRepositoryInterface
         /** @var AttachmentHelperInterface $helper */
         $helper = app(AttachmentHelperInterface::class);
 
-        $file = $helper->getAttachmentLocation($attachment);
+        $path = $helper->getAttachmentLocation($attachment);
         try {
-            unlink($file);
+            Storage::disk('upload')->delete($path);
         } catch (Exception $e) {
             Log::error(sprintf('Could not delete file for attachment %d: %s', $attachment->id, $e->getMessage()));
         }
@@ -225,13 +225,18 @@ class AttachmentRepository implements AttachmentRepositoryInterface
      * @param string     $note
      *
      * @return bool
+     * @throws Exception
      */
     public function updateNote(Attachment $attachment, string $note): bool
     {
         if ('' === $note) {
             $dbNote = $attachment->notes()->first();
             if (null !== $dbNote) {
-                $dbNote->delete();
+                try {
+                    $dbNote->delete();
+                } catch (Exception $e) {
+                    Log::debug(sprintf('Could not delete note: %s', $e->getMessage()));
+                }
             }
 
             return true;

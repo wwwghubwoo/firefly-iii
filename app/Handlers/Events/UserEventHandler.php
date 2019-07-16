@@ -146,6 +146,7 @@ class UserEventHandler
         } catch (Exception $e) {
             Log::error($e->getMessage());
         }
+
         // @codeCoverageIgnoreEnd
 
         return true;
@@ -172,6 +173,7 @@ class UserEventHandler
         } catch (Exception $e) {
             Log::error($e->getMessage());
         }
+
         // @codeCoverageIgnoreEnd
 
         return true;
@@ -199,6 +201,7 @@ class UserEventHandler
         } catch (Exception $e) {
             Log::error($e->getMessage());
         }
+
         // @codeCoverageIgnoreEnd
 
         return true;
@@ -214,7 +217,7 @@ class UserEventHandler
      */
     public function sendRegistrationMail(RegisteredUser $event): bool
     {
-        $sendMail = env('SEND_REGISTRATION_MAIL', true);
+        $sendMail = config('firefly.send_registration_mail');
         if ($sendMail) {
             // get the email address
             $email     = $event->user->email;

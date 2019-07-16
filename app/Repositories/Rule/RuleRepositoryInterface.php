@@ -34,7 +34,6 @@ use Illuminate\Support\Collection;
  */
 interface RuleRepositoryInterface
 {
-
     /**
      * @return int
      */
@@ -86,6 +85,20 @@ interface RuleRepositoryInterface
      * @return string
      */
     public function getPrimaryTrigger(Rule $rule): string;
+
+    /**
+     * @param Rule $rule
+     *
+     * @return Collection
+     */
+    public function getRuleActions(Rule $rule): Collection;
+
+    /**
+     * @param Rule $rule
+     *
+     * @return Collection
+     */
+    public function getRuleTriggers(Rule $rule): Collection;
 
     /**
      * @param Rule $rule

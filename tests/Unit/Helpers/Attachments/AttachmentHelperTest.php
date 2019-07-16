@@ -56,7 +56,7 @@ class AttachmentHelperTest extends TestCase
     {
         $attachment = Attachment::first();
         $helper     = new AttachmentHelper;
-        $path       = $path = sprintf('%s%sat-%d.data', storage_path('upload'), DIRECTORY_SEPARATOR, (int)$attachment->id);
+        $path       = $path = sprintf('%sat-%d.data', DIRECTORY_SEPARATOR, (int)$attachment->id);
         $this->assertEquals($helper->getAttachmentLocation($attachment), $path);
     }
 
@@ -114,7 +114,7 @@ class AttachmentHelperTest extends TestCase
     public function testSaveAttachmentFromApi(): void
     {
         // mock calls:
-        Crypt::shouldReceive('encrypt')->times(6)->andReturn('Some encrypted content');
+        Crypt::shouldReceive('encrypt')->times(1)->andReturn('Some encrypted content');
         Storage::fake('upload');
 
         $path   = public_path('apple-touch-icon.png');
